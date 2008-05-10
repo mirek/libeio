@@ -46,8 +46,8 @@ struct eio_req
   size_t size;     /* read, write, readahead, sendfile: length */
   void *ptr1;      /* all applicable requests: pathname, old name */
   void *ptr2;      /* all applicable requests: new name or memory buffer */
-  eio_tstamp nv1;      /* utime, futime: atime; busy: sleep time */
-  eio_tstamp nv2;      /* utime, futime: mtime */
+  eio_tstamp nv1;  /* utime, futime: atime; busy: sleep time */
+  eio_tstamp nv2;  /* utime, futime: mtime */
 
   int type;        /* EIO_xxx constant */
   int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open: flags */
@@ -145,7 +145,8 @@ eio_req *eio_nop       (eio_cb cb); /* does nothing except go through the whole 
 
 /* for groups */
 eio_req *eio_grp       (eio_cb cb);
-void eio_grp_feed      (eio_req *grp, int limit, void (*feed)(eio_req *req));
+void eio_grp_feed      (eio_req *grp, void (*feed)(eio_req *req), int limit);
+void eio_grp_limit     (eio_req *grp, int limit);
 void eio_grp_add       (eio_req *grp, eio_req *req);
 void eio_grp_cancel    (eio_req *grp); /* cancels all sub requests but not the group */
 

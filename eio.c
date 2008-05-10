@@ -241,7 +241,7 @@ static eio_req *reqq_shift (reqq *q)
   abort ();
 }
 
-static void grp_feed (eio_req *grp)
+static void grp_try_feed (eio_req *grp)
 {
   while (grp->size < grp->int2 && !EIO_CANCELLED (grp))
     {
@@ -253,23 +253,23 @@ static void grp_feed (eio_req *grp)
       if (old_len == grp->size)
         {
           grp->feed = 0;
-          grp->int2 = 0;
+          break;
         }
     }
 }
 
-static int eio_invoke (eio_req *req);
+static int eio_finish (eio_req *req);
 
 static int grp_dec (eio_req *grp)
 {
   --grp->size;
 
   /* call feeder, if applicable */
-  grp_feed (grp);
+  grp_try_feed (grp);
 
   /* finish, if done */
   if (!grp->size && grp->int1)
-    return eio_invoke (grp);
+    return eio_finish (grp);
   else
     return 0;
 }
@@ -282,7 +282,7 @@ void eio_destroy (eio_req *req)
   EIO_DESTROY (req);
 }
 
-static int eio_invoke (eio_req *req)
+static int eio_finish (eio_req *req)
 {
   int res = EIO_FINISH (req);
 
@@ -445,7 +445,7 @@ int eio_poll (void)
         {
           --npending;
 
-          if (!res_queue.size)
+          if (!res_queue.size && done_poll_cb)
             done_poll_cb ();
         }
 
@@ -463,7 +463,7 @@ int eio_poll (void)
         }
       else
         {
-          int res = eio_invoke (req);
+          int res = eio_finish (req);
           if (res)
             return res;
         }
@@ -919,7 +919,7 @@ X_THREAD_PROC (eio_proc)
 
       ++npending;
 
-      if (!reqq_push (&res_queue, req))
+      if (!reqq_push (&res_queue, req) && want_poll_cb)
         want_poll_cb ();
 
       self->req = 0;
@@ -938,7 +938,7 @@ quit:
 
 /*****************************************************************************/
 
-static void atfork_prepare (void)
+static void eio_atfork_prepare (void)
 {
   X_LOCK (wrklock);
   X_LOCK (reqlock);
@@ -951,7 +951,7 @@ static void atfork_prepare (void)
 #endif
 }
 
-static void atfork_parent (void)
+static void eio_atfork_parent (void)
 {
 #if !HAVE_READDIR_R
   X_UNLOCK (readdirlock);
@@ -964,7 +964,7 @@ static void atfork_parent (void)
   X_UNLOCK (wrklock);
 }
 
-static void atfork_child (void)
+static void eio_atfork_child (void)
 {
   eio_req *prv;
 
@@ -991,7 +991,7 @@ static void atfork_child (void)
   nready   = 0;
   npending = 0;
 
-  atfork_parent ();
+  eio_atfork_parent ();
 }
 
 int eio_init (void (*want_poll)(void), void (*done_poll)(void))
@@ -1010,7 +1010,7 @@ int eio_init (void (*want_poll)(void), void (*done_poll)(void))
   X_COND_CHECK  (reqwait);
 #endif
 
-  X_THREAD_ATFORK (atfork_prepare, atfork_parent, atfork_child);
+  X_THREAD_ATFORK (eio_atfork_prepare, eio_atfork_parent, eio_atfork_child);
 }
 
 #if 0
@@ -1416,10 +1416,19 @@ aio_nop (SV *callback=&PL_sv_undef)
 
 #endif
 
-void eio_grp_feed (eio_req *grp, int limit, void (*feed)(eio_req *req))
+void eio_grp_feed (eio_req *grp, void (*feed)(eio_req *req), int limit)
 {
   grp->int2 = limit;
   grp->feed = feed;
+
+  grp_try_feed (grp);
+}
+
+void eio_grp_limit (eio_req *grp, int limit)
+{
+  grp->int2 = limit;
+
+  grp_try_feed (grp);
 }
 
 void eio_grp_add (eio_req *grp, eio_req *req)
