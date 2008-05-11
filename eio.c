@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include <fcntl.h>
-#include <sched.h>
+#include <assert.h>
 
 #ifndef EIO_FINISH
 # define EIO_FINISH(req)  ((req)->finish) && !EIO_CANCELLED (req) ? (req)->finish (req) : 0
@@ -327,8 +327,8 @@ static void start_thread (void)
 {
   worker *wrk = calloc (1, sizeof (worker));
 
-  if (!wrk)
-    croak ("unable to allocate worker thread data");
+  /*TODO*/
+  assert (("unable to allocate worker thread data", !wrk));
 
   X_LOCK (wrklock);
 
