@@ -586,9 +586,9 @@ static ssize_t aio_readahead (int fd, off_t offset, size_t count, worker *self)
 
 static mutex_t readdirlock = X_MUTEX_INIT;
   
-static int readdir_r (DIR *dirp, X_DIRENT *ent, X_DIRENT **res)
+static int readdir_r (DIR *dirp, EIO_STRUCT_DIRENT *ent, EIO_STRUCT_DIRENT **res)
 {
-  X_DIRENT *e;
+  EIO_STRUCT_DIRENT *e;
   int errorno;
 
   X_LOCK (readdirlock);

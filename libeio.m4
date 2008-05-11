@@ -33,7 +33,6 @@ int main(void)
 }
 ],ac_cv_readahead=yes,ac_cv_readahead=no)])
 test $ac_cv_readahead = yes && AC_DEFINE(HAVE_READAHEAD, 1, readahead(2) is available (linux))
-test $ac_cv_readahead = yes && AC_DEFINE(_GNU_SOURCE, 1, _GNU_SOURCE required for readahead (linux))
 
 AC_CACHE_CHECK(for fdatasync, ac_cv_fdatasync, [AC_LINK_IFELSE([
 #include <unistd.h>
