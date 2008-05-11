@@ -94,10 +94,6 @@ int eio_poll (void);
 void eio_set_max_poll_time (eio_tstamp nseconds);
 /* do not handle more then count requests in one call to eio_poll_cb */
 void eio_set_max_poll_reqs (unsigned int nreqs);
-/* when != 0, then eio_submit blocks as long as nready > count */
-void eio_set_max_outstanding (unsigned int maxreqs);
-/* set maxinum number of idle threads */
-void eio_set_max_idle (unsigned int nthreads);
 
 /* set minimum required number
  * maximum wanted number
