@@ -2,19 +2,16 @@
 #include "xthread.h"
 
 #include <errno.h>
-
-#include "EXTERN.h"
-#include "perl.h"
-#include "XSUB.h"
-
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <dirent.h>
 
 #ifndef EIO_FINISH
 # define EIO_FINISH(req)  ((req)->finish) && !EIO_CANCELLED (req) ? (req)->finish (req) : 0
@@ -573,7 +570,7 @@ static ssize_t aio_readahead (int fd, off_t offset, size_t count, worker *self)
     {
       size_t len = todo < EIO_BUFSIZE ? todo : EIO_BUFSIZE;
 
-      pread (fd, aio_buf, len, offset);
+      pread (fd, eio_buf, len, offset);
       offset += len;
       todo   -= len;
     }
