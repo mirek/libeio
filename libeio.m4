@@ -21,7 +21,6 @@ int main(void)
 test $ac_cv_futimes = yes && AC_DEFINE(HAVE_FUTIMES, 1, futimes(2) is available)
 
 AC_CACHE_CHECK(for readahead, ac_cv_readahead, [AC_LINK_IFELSE([
-#define _GNU_SOURCE
 #include <fcntl.h>
 int main(void)
 {

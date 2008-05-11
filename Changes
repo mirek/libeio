@@ -1,0 +1,5 @@
+Revision history for libeio
+
+1.0
+	- "outbundled" from IO::AIO.
+
