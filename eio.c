@@ -770,15 +770,18 @@ static void scandir_ (eio_req *req, worker *self)
 /*****************************************************************************/
 
 #define ALLOC(len)				\
-  X_LOCK (wrklock);				\
-  req->flags |= EIO_FLAG_PTR2_FREE;		\
-  X_UNLOCK (wrklock);				\
-  req->ptr2 = malloc (len);			\
   if (!req->ptr2)				\
     {						\
-      errno       = ENOMEM;			\
-      req->result = -1;				\
-      break;					\
+      X_LOCK (wrklock);				\
+      req->flags |= EIO_FLAG_PTR2_FREE;		\
+      X_UNLOCK (wrklock);			\
+      req->ptr2 = malloc (len);			\
+      if (!req->ptr2)				\
+        {					\
+          errno       = ENOMEM;			\
+          req->result = -1;			\
+          break;				\
+        }					\
     }
 
 X_THREAD_PROC (eio_proc)
@@ -834,7 +837,8 @@ X_THREAD_PROC (eio_proc)
       if (!EIO_CANCELLED (req))
         switch (req->type)
           {
-            case EIO_READ:      req->result = req->offs >= 0
+            case EIO_READ:      ALLOC (req->size);
+                                req->result = req->offs >= 0
                                             ? pread     (req->int1, req->ptr2, req->size, req->offs)
                                             : read      (req->int1, req->ptr2, req->size); break;
             case EIO_WRITE:     req->result = req->offs >= 0
@@ -868,6 +872,7 @@ X_THREAD_PROC (eio_proc)
             case EIO_LINK:      req->result = link      (req->ptr1, req->ptr2); break;
             case EIO_SYMLINK:   req->result = symlink   (req->ptr1, req->ptr2); break;
             case EIO_MKNOD:     req->result = mknod     (req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
+
             case EIO_READLINK:  ALLOC (NAME_MAX);
                                 req->result = readlink  (req->ptr1, req->ptr2, NAME_MAX); break;
 
