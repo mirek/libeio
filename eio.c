@@ -11,7 +11,6 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <sched.h>
-#include <dirent.h>
 
 #ifndef EIO_FINISH
 # define EIO_FINISH(req)  ((req)->finish) && !EIO_CANCELLED (req) ? (req)->finish (req) : 0
@@ -37,6 +36,7 @@
 # include <unistd.h>
 # include <utime.h>
 # include <signal.h>
+# include <dirent.h>
 
 # ifndef EIO_STRUCT_DIRENT
 #  define EIO_STRUCT_DIRENT struct dirent
