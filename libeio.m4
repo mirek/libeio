@@ -1,3 +1,10 @@
+AC_SEARCH_LIBS(
+   pthread_create,
+   [pthread pthreads pthreadVC2],
+   ,
+   [AC_MSG_ERROR(pthread functions not found)]
+)
+
 AC_CACHE_CHECK(for futimes, ac_cv_futimes, [AC_LINK_IFELSE([[
 #include <sys/types.h>
 #include <sys/time.h>
@@ -14,6 +21,7 @@ int main(void)
 test $ac_cv_futimes = yes && AC_DEFINE(HAVE_FUTIMES, 1, futimes(2) is available)
 
 AC_CACHE_CHECK(for readahead, ac_cv_readahead, [AC_LINK_IFELSE([
+#define _GNU_SOURCE
 #include <fcntl.h>
 int main(void)
 {
@@ -26,6 +34,7 @@ int main(void)
 }
 ],ac_cv_readahead=yes,ac_cv_readahead=no)])
 test $ac_cv_readahead = yes && AC_DEFINE(HAVE_READAHEAD, 1, readahead(2) is available (linux))
+test $ac_cv_readahead = yes && AC_DEFINE(_GNU_SOURCE, 1, _GNU_SOURCE required for readahead (linux))
 
 AC_CACHE_CHECK(for fdatasync, ac_cv_fdatasync, [AC_LINK_IFELSE([
 #include <unistd.h>
