@@ -273,8 +273,8 @@ static int grp_dec (eio_req *grp)
 
 void eio_destroy (eio_req *req)
 {
-  if ((req)->flags & EIO_FLAG_PTR2_FREE)
-    free (req->ptr2);
+  if ((req)->flags & EIO_FLAG_PTR1_FREE) free (req->ptr1);
+  if ((req)->flags & EIO_FLAG_PTR2_FREE) free (req->ptr2);
 
   EIO_DESTROY (req);
 }
@@ -314,7 +314,9 @@ void eio_grp_cancel (eio_req *grp)
 
 void eio_cancel (eio_req *req)
 {
+  X_LOCK   (wrklock);
   req->flags |= EIO_FLAG_CANCELLED;
+  X_UNLOCK (wrklock);
 
   eio_grp_cancel (req);
 }
@@ -767,6 +769,18 @@ static void scandir_ (eio_req *req, worker *self)
 
 /*****************************************************************************/
 
+#define ALLOC(len)				\
+  X_LOCK (wrklock);				\
+  req->flags |= EIO_FLAG_PTR2_FREE;		\
+  X_UNLOCK (wrklock);				\
+  req->ptr2 = malloc (len);			\
+  if (!req->ptr2)				\
+    {						\
+      errno       = ENOMEM;			\
+      req->result = -1;				\
+      break;					\
+    }
+
 X_THREAD_PROC (eio_proc)
 {
   eio_req *req;
@@ -830,9 +844,12 @@ X_THREAD_PROC (eio_proc)
             case EIO_READAHEAD: req->result = readahead (req->int1, req->offs, req->size); break;
             case EIO_SENDFILE:  req->result = sendfile_ (req->int1, req->int2, req->offs, req->size, self); break;
 
-            case EIO_STAT:      req->result = stat      (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
-            case EIO_LSTAT:     req->result = lstat     (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
-            case EIO_FSTAT:     req->result = fstat     (req->int1, (EIO_STRUCT_STAT *)req->ptr2); break;
+            case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
+                                req->result = stat      (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
+            case EIO_LSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
+                                req->result = lstat     (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
+            case EIO_FSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
+                                req->result = fstat     (req->int1, (EIO_STRUCT_STAT *)req->ptr2); break;
 
             case EIO_CHOWN:     req->result = chown     (req->ptr1, req->int2, req->int3); break;
             case EIO_FCHOWN:    req->result = fchown    (req->int1, req->int2, req->int3); break;
@@ -851,7 +868,8 @@ X_THREAD_PROC (eio_proc)
             case EIO_LINK:      req->result = link      (req->ptr1, req->ptr2); break;
             case EIO_SYMLINK:   req->result = symlink   (req->ptr1, req->ptr2); break;
             case EIO_MKNOD:     req->result = mknod     (req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
-            case EIO_READLINK:  req->result = readlink  (req->ptr1, req->ptr2, NAME_MAX); break;
+            case EIO_READLINK:  ALLOC (NAME_MAX);
+                                req->result = readlink  (req->ptr1, req->ptr2, NAME_MAX); break;
 
             case EIO_SYNC:      req->result = 0; sync (); break;
             case EIO_FSYNC:     req->result = fsync     (req->int1); break;
@@ -1010,36 +1028,168 @@ int eio_init (void (*want_poll)(void), void (*done_poll)(void))
   X_THREAD_ATFORK (eio_atfork_prepare, eio_atfork_parent, eio_atfork_child);
 }
 
+static void eio_api_destroy (eio_req *req)
+{
+  free (req);
+}
+
+#define REQ(rtype)                                            	\
+  eio_req *req;                                                 \
+                                                                \
+  req = (eio_req *)calloc (1, sizeof *req);                     \
+  if (!req)                                                     \
+    return 0;                                                   \
+                                                                \
+  req->type = EIO_ ## rtype;                                    \
+  req->pri = EIO_DEFAULT_PRI + EIO_PRI_BIAS;                    \
+  req->finish = cb;						\
+  req->destroy = eio_api_destroy;
+
+#define SEND eio_submit (req); return req
+
+#define PATH (void)0
+
+eio_req *eio_fsync (int fd, eio_cb cb)
+{
+  REQ (FSYNC); req->int1 = fd; SEND;
+}
+
+eio_req *eio_fdatasync (int fd, eio_cb cb)
+{
+  REQ (FDATASYNC); req->int1 = fd; SEND;
+}
+
+eio_req *eio_readahead (int fd, off_t offset, size_t length, eio_cb cb)
+{
+  REQ (READAHEAD); req->int1 = fd; req->offs = offset; req->size = length; SEND;
+}
+
+eio_req *eio_read (int fd, off_t offset, size_t length, void *data, eio_cb cb)
+{
+  REQ (READ); req->int1 = fd; req->offs = offset; req->size = length; req->ptr2 = data; SEND;
+}
+
+eio_req *eio_write (int fd, off_t offset, size_t length, void *data, eio_cb cb)
+{
+  REQ (WRITE); req->int1 = fd; req->offs = offset; req->size = length; req->ptr2 = data; SEND;
+}
+
+eio_req *eio_fstat (int fd, eio_cb cb)
+{
+  REQ (FSTAT); req->int1 = fd; SEND;
+}
+
+eio_req *eio_futime (int fd, double atime, double mtime, eio_cb cb)
+{
+  REQ (FUTIME); req->int1 = fd; req->nv1 = atime; req->nv2 = mtime; SEND;
+}
+
+eio_req *eio_ftruncate (int fd, off_t offset, eio_cb cb)
+{
+  REQ (FTRUNCATE); req->int1 = fd; req->offs = offset; SEND;
+}
+
+eio_req *eio_fchmod (int fd, mode_t mode, eio_cb cb)
+{
+  REQ (FCHMOD); req->int1 = fd; req->int2 = (long)mode; SEND;
+}
+
+eio_req *eio_fchown (int fd, uid_t uid, gid_t gid, eio_cb cb)
+{
+  REQ (FCHOWN); req->int1 = fd; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
+}
+
+eio_req *eio_dup2 (int fd, int fd2, eio_cb cb)
+{
+  REQ (DUP2); req->int1 = fd; req->int2 = fd2; SEND;
+}
+
+eio_req *eio_sendfile (int out_fd, int in_fd, off_t in_offset, size_t length, eio_cb cb)
+{
+  REQ (SENDFILE); req->int1 = out_fd; req->int2 = in_fd; req->offs = in_offset; req->size = length; SEND;
+}
+
+eio_req *eio_open (const char *path, int flags, mode_t mode, eio_cb cb)
+{
+  REQ (OPEN); PATH; req->int1 = flags; req->int2 = (long)mode; SEND;
+}
+
+eio_req *eio_readlink (const char *path, eio_cb cb)
+{
+  REQ (READLINK); PATH; SEND;
+}
+
+eio_req *eio_stat (const char *path, eio_cb cb)
+{
+  REQ (STAT); PATH; SEND;
+}
+
+eio_req *eio_lstat (const char *path, eio_cb cb)
+{
+  REQ (LSTAT); PATH; SEND;
+}
+
+eio_req *eio_utime (const char *path, double atime, double mtime, eio_cb cb)
+{
+  REQ (UTIME); PATH; req->nv1 = atime; req->nv2 = mtime; SEND;
+}
+
+eio_req *eio_truncate (const char *path, off_t offset, eio_cb cb)
+{
+  REQ (TRUNCATE); PATH; req->offs = offset; SEND;
+}
+
+eio_req *eio_chown (const char *path, uid_t uid, gid_t gid, eio_cb cb)
+{
+  REQ (CHOWN); PATH; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
+}
+
+eio_req *eio_chmod (const char *path, mode_t mode, eio_cb cb)
+{
+  REQ (CHMOD); PATH; req->int2 = (long)mode; SEND;
+}
+
+eio_req *eio_mkdir (const char *path, mode_t mode, eio_cb cb)
+{
+  REQ (MKDIR); PATH; req->int2 = (long)mode; SEND;
+}
+
+eio_req *eio_unlink (const char *path, eio_cb cb)
+{
+  REQ (UNLINK); PATH; SEND;
+}
+
+eio_req *eio_rmdir (const char *path, eio_cb cb)
+{
+  REQ (RMDIR); PATH; SEND;
+}
+
+eio_req *eio_readdir (const char *path, eio_cb cb)
+{
+  REQ (READDIR); PATH; SEND;
+}
+
+eio_req *eio_mknod (const char *path, mode_t mode, dev_t dev, eio_cb cb)
+{
+  REQ (MKNOD); PATH; req->int2 = (long)mode; req->int2 = (long)dev; SEND;
+}
+
+eio_req *eio_busy (double delay, eio_cb cb)
+{
+  REQ (BUSY); req->nv1 = delay; SEND;
+}
+
+eio_req *eio_nop (eio_cb cb)
+{
+  REQ (NOP); SEND;
+}
+
+#undef REQ
+#undef PATH
+#undef SEND
+
 #if 0
 
-eio_req *eio_fsync     (int fd, eio_cb cb);
-eio_req *eio_fdatasync (int fd, eio_cb cb);
-eio_req *eio_dupclose  (int fd, eio_cb cb);
-eio_req *eio_readahead (int fd, off_t offset, size_t length, eio_cb cb);
-eio_req *eio_read      (int fd, off_t offs, size_t length, char *data, eio_cb cb);
-eio_req *eio_write     (int fd, off_t offs, size_t length, char *data, eio_cb cb);
-eio_req *eio_fstat     (int fd, eio_cb cb); /* stat buffer=ptr2 allocates dynamically */
-eio_req *eio_futime    (int fd, double atime, double mtime, eio_cb cb);
-eio_req *eio_ftruncate (int fd, off_t offset, eio_cb cb);
-eio_req *eio_fchmod    (int fd, mode_t mode, eio_cb cb);
-eio_req *eio_fchown    (int fd, uid_t uid, gid_t gid, eio_cb cb);
-eio_req *eio_dup2      (int fd, int fd2, eio_cb cb);
-eio_req *eio_sendfile  (int out_fd, int in_fd, off_t in_offset, size_t length, eio_cb cb);
-eio_req *eio_open      (const char *path, int flags, mode_t mode, eio_cb cb);
-eio_req *eio_readlink  (const char *path, eio_cb cb); /* result=ptr2 allocated dynamically */
-eio_req *eio_stat      (const char *path, eio_cb cb); /* stat buffer=ptr2 allocates dynamically */
-eio_req *eio_lstat     (const char *path, eio_cb cb); /* stat buffer=ptr2 allocates dynamically */
-eio_req *eio_utime     (const char *path, double atime, double mtime, eio_cb cb);
-eio_req *eio_truncate  (const char *path, off_t offset, eio_cb cb);
-eio_req *eio_chmod     (const char *path, mode_t mode, eio_cb cb);
-eio_req *eio_mkdir     (const char *path, mode_t mode, eio_cb cb);
-eio_req *eio_chown     (const char *path, uid_t uid, gid_t gid, eio_cb cb);
-eio_req *eio_unlink    (const char *path, eio_cb cb);
-eio_req *eio_rmdir     (const char *path, eio_cb cb);
-eio_req *eio_readdir   (const char *path, eio_cb cb); /* result=ptr2 allocated dynamically */
-eio_req *eio_mknod     (const char *path, mode_t mode, dev_t dev, eio_cb cb);
-eio_req *eio_busy      (double delay, eio_cb cb); /* ties a thread for this long, simulating busyness */
-eio_req *eio_nop       (eio_cb cb); /* does nothing except go through the whole process */
 void
 aio_open (SV8 *pathname, int flags, int mode, SV *callback=&PL_sv_undef)
 	PROTOTYPE: $$$;$
