@@ -25,10 +25,9 @@ AC_CACHE_CHECK(for readahead, ac_cv_readahead, [AC_LINK_IFELSE([
 int main(void)
 {
    int fd = 0;
-   off64_t offset = 1;
    size_t count = 2;
    ssize_t res;
-   res = readahead (fd, offset, count);
+   res = readahead (fd, 0, count);
    return 0;
 }
 ],ac_cv_readahead=yes,ac_cv_readahead=no)])

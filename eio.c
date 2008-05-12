@@ -44,10 +44,6 @@
 
 #endif
 
-# ifndef EIO_STRUCT_STAT
-#  define EIO_STRUCT_STAT struct stat
-# endif
-
 #if HAVE_SENDFILE
 # if __linux
 #  include <sys/sendfile.h>
@@ -79,6 +75,7 @@
   X_LOCK (wrklock);				\
   self->dbuf = eio_buf = malloc (EIO_BUFSIZE);	\
   X_UNLOCK (wrklock);				\
+  errno = ENOMEM;				\
   if (!eio_buf)					\
     return -1;
 
@@ -97,12 +94,13 @@ static int tvdiff (struct timeval *tv1, struct timeval *tv2)
        + ((tv2->tv_usec - tv1->tv_usec) >> 10);
 }
 
-static unsigned int started, idle, wanted;
+static unsigned int started, idle, wanted = 4;
 
 /* worker threads management */
 static mutex_t wrklock = X_MUTEX_INIT;
 
-typedef struct worker {
+typedef struct worker
+{
   /* locked by wrklock */
   struct worker *prev, *next;
 
@@ -328,7 +326,7 @@ static void start_thread (void)
   worker *wrk = calloc (1, sizeof (worker));
 
   /*TODO*/
-  assert (("unable to allocate worker thread data", !wrk));
+  assert (("unable to allocate worker thread data", wrk));
 
   X_LOCK (wrklock);
 
@@ -487,8 +485,8 @@ int eio_poll (void)
 /* work around various missing functions */
 
 #if !HAVE_PREADWRITE
-# define pread  aio_pread
-# define pwrite aio_pwrite
+# define pread  eio__pread
+# define pwrite eio__pwrite
 
 /*
  * make our pread/pwrite safe against themselves, but not against
@@ -497,7 +495,8 @@ int eio_poll (void)
  */
 static mutex_t preadwritelock = X_MUTEX_INIT;
 
-static ssize_t pread (int fd, void *buf, size_t count, off_t offset)
+static ssize_t
+eio__pread (int fd, void *buf, size_t count, off_t offset)
 {
   ssize_t res;
   off_t ooffset;
@@ -512,7 +511,8 @@ static ssize_t pread (int fd, void *buf, size_t count, off_t offset)
   return res;
 }
 
-static ssize_t pwrite (int fd, void *buf, size_t count, off_t offset)
+static ssize_t
+eio__pwrite (int fd, void *buf, size_t count, off_t offset)
 {
   ssize_t res;
   off_t ooffset;
@@ -530,10 +530,11 @@ static ssize_t pwrite (int fd, void *buf, size_t count, off_t offset)
 
 #ifndef HAVE_FUTIMES
 
-# define utimes(path,times)  aio_utimes  (path, times)
-# define futimes(fd,times)   aio_futimes (fd, times)
+# define utimes(path,times)  eio__utimes  (path, times)
+# define futimes(fd,times)   eio__futimes (fd, times)
 
-static int aio_utimes (const char *filename, const struct timeval times[2])
+static int
+eio__utimes (const char *filename, const struct timeval times[2])
 {
   if (times)
     {
@@ -548,7 +549,7 @@ static int aio_utimes (const char *filename, const struct timeval times[2])
     return utime (filename, 0);
 }
 
-static int aio_futimes (int fd, const struct timeval tv[2])
+static int eio__futimes (int fd, const struct timeval tv[2])
 {
   errno = ENOSYS;
   return -1;
@@ -561,9 +562,10 @@ static int aio_futimes (int fd, const struct timeval tv[2])
 #endif
 
 #if !HAVE_READAHEAD
-# define readahead(fd,offset,count) aio_readahead (fd, offset, count, self)
+# define readahead(fd,offset,count) eio__readahead (fd, offset, count, self)
 
-static ssize_t aio_readahead (int fd, off_t offset, size_t count, worker *self)
+static ssize_t
+eio__readahead (int fd, off_t offset, size_t count, worker *self)
 {
   size_t todo = count;
   dBUF;
@@ -584,11 +586,12 @@ static ssize_t aio_readahead (int fd, off_t offset, size_t count, worker *self)
 #endif
 
 #if !HAVE_READDIR_R
-# define readdir_r aio_readdir_r
+# define readdir_r eio__readdir_r
 
 static mutex_t readdirlock = X_MUTEX_INIT;
   
-static int readdir_r (DIR *dirp, EIO_STRUCT_DIRENT *ent, EIO_STRUCT_DIRENT **res)
+static int
+eio__readdir_r (DIR *dirp, EIO_STRUCT_DIRENT *ent, EIO_STRUCT_DIRENT **res)
 {
   EIO_STRUCT_DIRENT *e;
   int errorno;
@@ -614,7 +617,8 @@ static int readdir_r (DIR *dirp, EIO_STRUCT_DIRENT *ent, EIO_STRUCT_DIRENT **res
 #endif
 
 /* sendfile always needs emulation */
-static ssize_t sendfile_ (int ofd, int ifd, off_t offset, size_t count, worker *self)
+static ssize_t
+eio__sendfile (int ofd, int ifd, off_t offset, size_t count, worker *self)
 {
   ssize_t res;
 
@@ -707,7 +711,8 @@ static ssize_t sendfile_ (int ofd, int ifd, off_t offset, size_t count, worker *
 }
 
 /* read a full directory */
-static void scandir_ (eio_req *req, worker *self)
+static void
+eio__scandir (eio_req *req, worker *self)
 {
   DIR *dirp;
   union
@@ -845,8 +850,8 @@ X_THREAD_PROC (eio_proc)
                                             ? pwrite    (req->int1, req->ptr2, req->size, req->offs)
                                             : write     (req->int1, req->ptr2, req->size); break;
 
-            case EIO_READAHEAD: req->result = readahead (req->int1, req->offs, req->size); break;
-            case EIO_SENDFILE:  req->result = sendfile_ (req->int1, req->int2, req->offs, req->size, self); break;
+            case EIO_READAHEAD: req->result = readahead     (req->int1, req->offs, req->size); break;
+            case EIO_SENDFILE:  req->result = eio__sendfile (req->int1, req->int2, req->offs, req->size, self); break;
 
             case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
                                 req->result = stat      (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
@@ -880,7 +885,7 @@ X_THREAD_PROC (eio_proc)
             case EIO_FSYNC:     req->result = fsync     (req->int1); break;
             case EIO_FDATASYNC: req->result = fdatasync (req->int1); break;
 
-            case EIO_READDIR:   scandir_ (req, self); break;
+            case EIO_READDIR:   eio__scandir (req, self); break;
 
             case EIO_BUSY:
 #ifdef _WIN32
@@ -923,6 +928,7 @@ X_THREAD_PROC (eio_proc)
 
             case EIO_GROUP:
             case EIO_NOP:
+              req->result = 0;
               break;
 
             case EIO_QUIT:
@@ -1045,528 +1051,210 @@ static void eio_api_destroy (eio_req *req)
   if (!req)                                                     \
     return 0;                                                   \
                                                                 \
-  req->type = EIO_ ## rtype;                                    \
+  req->type = rtype;                                            \
   req->pri = EIO_DEFAULT_PRI + EIO_PRI_BIAS;                    \
   req->finish = cb;						\
   req->destroy = eio_api_destroy;
 
 #define SEND eio_submit (req); return req
 
-#define PATH (void)0
+#define PATH							\
+  req->flags |= EIO_FLAG_PTR1_FREE;				\
+  req->ptr1 = strdup (path);					\
+  if (!req->ptr1)						\
+    {								\
+      eio_api_destroy (req);					\
+      return 0;							\
+    }
 
-eio_req *eio_fsync (int fd, eio_cb cb)
+eio_req *eio_nop (eio_cb cb)
 {
-  REQ (FSYNC); req->int1 = fd; SEND;
-}
-
-eio_req *eio_fdatasync (int fd, eio_cb cb)
-{
-  REQ (FDATASYNC); req->int1 = fd; SEND;
-}
-
-eio_req *eio_readahead (int fd, off_t offset, size_t length, eio_cb cb)
-{
-  REQ (READAHEAD); req->int1 = fd; req->offs = offset; req->size = length; SEND;
-}
-
-eio_req *eio_read (int fd, off_t offset, size_t length, void *data, eio_cb cb)
-{
-  REQ (READ); req->int1 = fd; req->offs = offset; req->size = length; req->ptr2 = data; SEND;
-}
-
-eio_req *eio_write (int fd, off_t offset, size_t length, void *data, eio_cb cb)
-{
-  REQ (WRITE); req->int1 = fd; req->offs = offset; req->size = length; req->ptr2 = data; SEND;
-}
-
-eio_req *eio_fstat (int fd, eio_cb cb)
-{
-  REQ (FSTAT); req->int1 = fd; SEND;
-}
-
-eio_req *eio_futime (int fd, double atime, double mtime, eio_cb cb)
-{
-  REQ (FUTIME); req->int1 = fd; req->nv1 = atime; req->nv2 = mtime; SEND;
-}
-
-eio_req *eio_ftruncate (int fd, off_t offset, eio_cb cb)
-{
-  REQ (FTRUNCATE); req->int1 = fd; req->offs = offset; SEND;
-}
-
-eio_req *eio_fchmod (int fd, mode_t mode, eio_cb cb)
-{
-  REQ (FCHMOD); req->int1 = fd; req->int2 = (long)mode; SEND;
-}
-
-eio_req *eio_fchown (int fd, uid_t uid, gid_t gid, eio_cb cb)
-{
-  REQ (FCHOWN); req->int1 = fd; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
-}
-
-eio_req *eio_dup2 (int fd, int fd2, eio_cb cb)
-{
-  REQ (DUP2); req->int1 = fd; req->int2 = fd2; SEND;
-}
-
-eio_req *eio_sendfile (int out_fd, int in_fd, off_t in_offset, size_t length, eio_cb cb)
-{
-  REQ (SENDFILE); req->int1 = out_fd; req->int2 = in_fd; req->offs = in_offset; req->size = length; SEND;
-}
-
-eio_req *eio_open (const char *path, int flags, mode_t mode, eio_cb cb)
-{
-  REQ (OPEN); PATH; req->int1 = flags; req->int2 = (long)mode; SEND;
-}
-
-eio_req *eio_readlink (const char *path, eio_cb cb)
-{
-  REQ (READLINK); PATH; SEND;
-}
-
-eio_req *eio_stat (const char *path, eio_cb cb)
-{
-  REQ (STAT); PATH; SEND;
-}
-
-eio_req *eio_lstat (const char *path, eio_cb cb)
-{
-  REQ (LSTAT); PATH; SEND;
-}
-
-eio_req *eio_utime (const char *path, double atime, double mtime, eio_cb cb)
-{
-  REQ (UTIME); PATH; req->nv1 = atime; req->nv2 = mtime; SEND;
-}
-
-eio_req *eio_truncate (const char *path, off_t offset, eio_cb cb)
-{
-  REQ (TRUNCATE); PATH; req->offs = offset; SEND;
-}
-
-eio_req *eio_chown (const char *path, uid_t uid, gid_t gid, eio_cb cb)
-{
-  REQ (CHOWN); PATH; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
-}
-
-eio_req *eio_chmod (const char *path, mode_t mode, eio_cb cb)
-{
-  REQ (CHMOD); PATH; req->int2 = (long)mode; SEND;
-}
-
-eio_req *eio_mkdir (const char *path, mode_t mode, eio_cb cb)
-{
-  REQ (MKDIR); PATH; req->int2 = (long)mode; SEND;
-}
-
-eio_req *eio_unlink (const char *path, eio_cb cb)
-{
-  REQ (UNLINK); PATH; SEND;
-}
-
-eio_req *eio_rmdir (const char *path, eio_cb cb)
-{
-  REQ (RMDIR); PATH; SEND;
-}
-
-eio_req *eio_readdir (const char *path, eio_cb cb)
-{
-  REQ (READDIR); PATH; SEND;
-}
-
-eio_req *eio_mknod (const char *path, mode_t mode, dev_t dev, eio_cb cb)
-{
-  REQ (MKNOD); PATH; req->int2 = (long)mode; req->int2 = (long)dev; SEND;
+  REQ (EIO_NOP); SEND;
 }
 
 eio_req *eio_busy (double delay, eio_cb cb)
 {
-  REQ (BUSY); req->nv1 = delay; SEND;
+  REQ (EIO_BUSY); req->nv1 = delay; SEND;
 }
 
-eio_req *eio_nop (eio_cb cb)
+eio_req *eio_sync (eio_cb cb)
 {
-  REQ (NOP); SEND;
+  REQ (EIO_SYNC); SEND;
+}
+
+eio_req *eio_fsync (int fd, eio_cb cb)
+{
+  REQ (EIO_FSYNC); req->int1 = fd; SEND;
+}
+
+eio_req *eio_fdatasync (int fd, eio_cb cb)
+{
+  REQ (EIO_FDATASYNC); req->int1 = fd; SEND;
+}
+
+eio_req *eio_close (int fd, eio_cb cb)
+{
+  REQ (EIO_CLOSE); req->int1 = fd; SEND;
+}
+
+eio_req *eio_readahead (int fd, off_t offset, size_t length, eio_cb cb)
+{
+  REQ (EIO_READAHEAD); req->int1 = fd; req->offs = offset; req->size = length; SEND;
+}
+
+eio_req *eio_read (int fd, void *data, size_t length, off_t offset, eio_cb cb)
+{
+  REQ (EIO_READ); req->int1 = fd; req->offs = offset; req->size = length; req->ptr2 = data; SEND;
+}
+
+eio_req *eio_write (int fd, void *data, size_t length, off_t offset, eio_cb cb)
+{
+  REQ (EIO_WRITE); req->int1 = fd; req->offs = offset; req->size = length; req->ptr2 = data; SEND;
+}
+
+eio_req *eio_fstat (int fd, eio_cb cb)
+{
+  REQ (EIO_FSTAT); req->int1 = fd; SEND;
+}
+
+eio_req *eio_futime (int fd, double atime, double mtime, eio_cb cb)
+{
+  REQ (EIO_FUTIME); req->int1 = fd; req->nv1 = atime; req->nv2 = mtime; SEND;
+}
+
+eio_req *eio_ftruncate (int fd, off_t offset, eio_cb cb)
+{
+  REQ (EIO_FTRUNCATE); req->int1 = fd; req->offs = offset; SEND;
+}
+
+eio_req *eio_fchmod (int fd, mode_t mode, eio_cb cb)
+{
+  REQ (EIO_FCHMOD); req->int1 = fd; req->int2 = (long)mode; SEND;
+}
+
+eio_req *eio_fchown (int fd, uid_t uid, gid_t gid, eio_cb cb)
+{
+  REQ (EIO_FCHOWN); req->int1 = fd; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
+}
+
+eio_req *eio_dup2 (int fd, int fd2, eio_cb cb)
+{
+  REQ (EIO_DUP2); req->int1 = fd; req->int2 = fd2; SEND;
+}
+
+eio_req *eio_sendfile (int out_fd, int in_fd, off_t in_offset, size_t length, eio_cb cb)
+{
+  REQ (EIO_SENDFILE); req->int1 = out_fd; req->int2 = in_fd; req->offs = in_offset; req->size = length; SEND;
+}
+
+eio_req *eio_open (const char *path, int flags, mode_t mode, eio_cb cb)
+{
+  REQ (EIO_OPEN); PATH; req->int1 = flags; req->int2 = (long)mode; SEND;
+}
+
+eio_req *eio_utime (const char *path, double atime, double mtime, eio_cb cb)
+{
+  REQ (EIO_UTIME); PATH; req->nv1 = atime; req->nv2 = mtime; SEND;
+}
+
+eio_req *eio_truncate (const char *path, off_t offset, eio_cb cb)
+{
+  REQ (EIO_TRUNCATE); PATH; req->offs = offset; SEND;
+}
+
+eio_req *eio_chown (const char *path, uid_t uid, gid_t gid, eio_cb cb)
+{
+  REQ (EIO_CHOWN); PATH; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
+}
+
+eio_req *eio_chmod (const char *path, mode_t mode, eio_cb cb)
+{
+  REQ (EIO_CHMOD); PATH; req->int2 = (long)mode; SEND;
+}
+
+eio_req *eio_mkdir (const char *path, mode_t mode, eio_cb cb)
+{
+  REQ (EIO_MKDIR); PATH; req->int2 = (long)mode; SEND;
+}
+
+static eio_req *
+eio__1path (int type, const char *path, eio_cb cb)
+{
+  REQ (type); PATH; SEND;
+}
+
+eio_req *eio_readlink (const char *path, eio_cb cb)
+{
+  return eio__1path (EIO_READLINK, path, cb);
+}
+
+eio_req *eio_stat (const char *path, eio_cb cb)
+{
+  return eio__1path (EIO_STAT, path, cb);
+}
+
+eio_req *eio_lstat (const char *path, eio_cb cb)
+{
+  return eio__1path (EIO_LSTAT, path, cb);
+}
+
+eio_req *eio_unlink (const char *path, eio_cb cb)
+{
+  return eio__1path (EIO_UNLINK, path, cb);
+}
+
+eio_req *eio_rmdir (const char *path, eio_cb cb)
+{
+  return eio__1path (EIO_RMDIR, path, cb);
+}
+
+eio_req *eio_readdir (const char *path, eio_cb cb)
+{
+  return eio__1path (EIO_READDIR, path, cb);
+}
+
+eio_req *eio_mknod (const char *path, mode_t mode, dev_t dev, eio_cb cb)
+{
+  REQ (EIO_MKNOD); PATH; req->int2 = (long)mode; req->int2 = (long)dev; SEND;
+}
+
+static eio_req *
+eio__2path (int type, const char *path, const char *new_path, eio_cb cb)
+{
+  REQ (type); PATH;
+
+  req->flags |= EIO_FLAG_PTR2_FREE;
+  req->ptr2 = strdup (new_path);
+  if (!req->ptr2)
+    {
+      eio_api_destroy (req);
+      return 0;
+    }
+
+  SEND;
+}
+
+eio_req *eio_link (const char *path, const char *new_path, eio_cb cb)
+{
+  return eio__2path (EIO_LINK, path, new_path, cb);
+}
+
+eio_req *eio_symlink (const char *path, const char *new_path, eio_cb cb)
+{
+  return eio__2path (EIO_SYMLINK, path, new_path, cb);
+}
+
+eio_req *eio_rename (const char *path, const char *new_path, eio_cb cb)
+{
+  return eio__2path (EIO_RENAME, path, new_path, cb);
 }
 
 #undef REQ
 #undef PATH
 #undef SEND
 
-#if 0
-
-void
-aio_open (SV8 *pathname, int flags, int mode, SV *callback=&PL_sv_undef)
-	PROTOTYPE: $$$;$
-	PPCODE:
-{
-        dREQ;
-
-        req->type = EIO_OPEN;
-        req->sv1  = newSVsv (pathname);
-        req->ptr1 = SvPVbyte_nolen (req->sv1);
-        req->int1 = flags;
-        req->int2 = mode;
-
-        EIO_SEND;
-}
-
-void
-aio_fsync (SV *fh, SV *callback=&PL_sv_undef)
-	PROTOTYPE: $;$
-        ALIAS:
-           aio_fsync     = EIO_FSYNC
-           aio_fdatasync = EIO_FDATASYNC
-	PPCODE:
-{
-        dREQ;
-
-        req->type = ix;
-        req->sv1  = newSVsv (fh);
-        req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh)));
-
-        EIO_SEND (req);
-}
-
-void
-aio_close (SV *fh, SV *callback=&PL_sv_undef)
-	PROTOTYPE: $;$
-	PPCODE:
-{
-        dREQ;
-
-        req->type = EIO_CLOSE;
-        req->sv1  = newSVsv (fh);
-        req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh)));
-
-        EIO_SEND (req);
-}
-
-void
-aio_read (SV *fh, SV *offset, SV *length, SV8 *data, IV dataoffset, SV *callback=&PL_sv_undef)
-        ALIAS:
-           aio_read  = EIO_READ
-           aio_write = EIO_WRITE
-	PROTOTYPE: $$$$$;$
-        PPCODE:
-{
-        STRLEN svlen;
-        char *svptr = SvPVbyte (data, svlen);
-        UV len = SvUV (length);
-
-        SvUPGRADE (data, SVt_PV);
-        SvPOK_on (data);
-
-        if (dataoffset < 0)
-          dataoffset += svlen;
-
-        if (dataoffset < 0 || dataoffset > svlen)
-          croak ("dataoffset outside of data scalar");
-
-        if (ix == EIO_WRITE)
-          {
-            /* write: check length and adjust. */
-            if (!SvOK (length) || len + dataoffset > svlen)
-              len = svlen - dataoffset;
-          }
-        else
-          {
-            /* read: grow scalar as necessary */
-            svptr = SvGROW (data, len + dataoffset + 1);
-          }
-
-        if (len < 0)
-          croak ("length must not be negative");
-
-        {
-          dREQ;
-
-          req->type = ix;
-          req->sv1  = newSVsv (fh);
-          req->int1 = PerlIO_fileno (ix == EIO_READ ? IoIFP (sv_2io (fh))
-                                                    : IoOFP (sv_2io (fh)));
-          req->offs = SvOK (offset) ? SvVAL64 (offset) : -1;
-          req->size = len;
-          req->sv2  = SvREFCNT_inc (data);
-          req->ptr2 = (char *)svptr + dataoffset;
-          req->stroffset = dataoffset;
-
-          if (!SvREADONLY (data))
-            {
-              SvREADONLY_on (data);
-              req->flags |= FLAG_SV2_RO_OFF;
-            }
-
-          EIO_SEND;
-        }
-}
-
-void
-aio_readlink (SV8 *path, SV *callback=&PL_sv_undef)
-	PROTOTYPE: $$;$
-        PPCODE:
-{
-	SV *data;
-        dREQ;
-
-        data = newSV (NAME_MAX);
-        SvPOK_on (data);
-
-        req->type = EIO_READLINK;
-        req->sv1  = newSVsv (path);
-        req->ptr1 = SvPVbyte_nolen (req->sv1);
-        req->sv2  = data;
-        req->ptr2 = SvPVbyte_nolen (data);
-
-        EIO_SEND;
-}
-
-void
-aio_sendfile (SV *out_fh, SV *in_fh, SV *in_offset, UV length, SV *callback=&PL_sv_undef)
-	PROTOTYPE: $$$$;$
-        PPCODE:
-{
-	dREQ;
-
-        req->type = EIO_SENDFILE;
-        req->sv1  = newSVsv (out_fh);
-        req->int1 = PerlIO_fileno (IoIFP (sv_2io (out_fh)));
-        req->sv2  = newSVsv (in_fh);
-        req->int2 = PerlIO_fileno (IoIFP (sv_2io (in_fh)));
-        req->offs = SvVAL64 (in_offset);
-        req->size = length;
-
-        EIO_SEND;
-}
-
-void
-aio_readahead (SV *fh, SV *offset, IV length, SV *callback=&PL_sv_undef)
-	PROTOTYPE: $$$;$
-        PPCODE:
-{
-	dREQ;
-
-        req->type = EIO_READAHEAD;
-        req->sv1  = newSVsv (fh);
-        req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh)));
-        req->offs = SvVAL64 (offset);
-        req->size = length;
-
-        EIO_SEND;
-}
-
-void
-aio_stat (SV8 *fh_or_path, SV *callback=&PL_sv_undef)
-        ALIAS:
-           aio_stat  = EIO_STAT
-           aio_lstat = EIO_LSTAT
-	PPCODE:
-{
-	dREQ;
-
-        req->ptr2 = malloc (sizeof (EIO_STRUCT_STAT));
-        if (!req->ptr2)
-          {
-            req_destroy (req);
-            croak ("out of memory during aio_stat statdata allocation");
-          }
-
-        req->flags |= FLAG_PTR2_FREE;
-        req->sv1 = newSVsv (fh_or_path);
-
-        if (SvPOK (fh_or_path))
-          {
-            req->type = ix;
-            req->ptr1 = SvPVbyte_nolen (req->sv1);
-          }
-        else
-          {
-            req->type = EIO_FSTAT;
-            req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh_or_path)));
-          }
-
-        EIO_SEND;
-}
-
-void
-aio_utime (SV8 *fh_or_path, SV *atime, SV *mtime, SV *callback=&PL_sv_undef)
-	PPCODE:
-{
-	dREQ;
-
-        req->nv1 = SvOK (atime) ? SvNV (atime) : -1.;
-        req->nv2 = SvOK (mtime) ? SvNV (mtime) : -1.;
-        req->sv1 = newSVsv (fh_or_path);
-
-        if (SvPOK (fh_or_path))
-          {
-            req->type = EIO_UTIME;
-            req->ptr1 = SvPVbyte_nolen (req->sv1);
-          }
-        else
-          {
-            req->type = EIO_FUTIME;
-            req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh_or_path)));
-          }
-
-        EIO_SEND;
-}
-
-void
-aio_truncate (SV8 *fh_or_path, SV *offset, SV *callback=&PL_sv_undef)
-	PPCODE:
-{
-	dREQ;
-
-        req->sv1  = newSVsv (fh_or_path);
-        req->offs = SvOK (offset) ? SvVAL64 (offset) : -1;
-
-        if (SvPOK (fh_or_path))
-          {
-            req->type = EIO_TRUNCATE;
-            req->ptr1 = SvPVbyte_nolen (req->sv1);
-          }
-        else
-          {
-            req->type = EIO_FTRUNCATE;
-            req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh_or_path)));
-          }
-
-        EIO_SEND;
-}
-
-void
-aio_chmod (SV8 *fh_or_path, int mode, SV *callback=&PL_sv_undef)
-	ALIAS:
-        aio_chmod  = EIO_CHMOD
-        aio_fchmod = EIO_FCHMOD
-        aio_mkdir  = EIO_MKDIR
-	PPCODE:
-{
-	dREQ;
-
-        req->type = type;
-        req->int2 = mode;
-        req->sv1  = newSVsv (fh_or_path);
-
-        if (ix == EIO_FCHMOD)
-          req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh_or_path)));
-        else
-          req->ptr1 = SvPVbyte_nolen (req->sv1);
-
-        EIO_SEND;
-}
-
-void
-aio_chown (SV8 *fh_or_path, SV *uid, SV *gid, SV *callback=&PL_sv_undef)
-	PPCODE:
-{
-	dREQ;
-
-        req->int2 = SvOK (uid) ? SvIV (uid) : -1;
-        req->int3 = SvOK (gid) ? SvIV (gid) : -1;
-        req->sv1  = newSVsv (fh_or_path);
-
-        if (SvPOK (fh_or_path))
-          {
-            req->type = EIO_CHOWN;
-            req->ptr1 = SvPVbyte_nolen (req->sv1);
-          }
-        else
-          {
-            req->type = EIO_FCHOWN;
-            req->int1 = PerlIO_fileno (IoIFP (sv_2io (fh_or_path)));
-          }
-
-        EIO_SEND;
-}
-
-void
-aio_unlink (SV8 *pathname, SV *callback=&PL_sv_undef)
-        ALIAS:
-           aio_unlink  = EIO_UNLINK
-           aio_rmdir   = EIO_RMDIR
-           aio_readdir = EIO_READDIR
-	PPCODE:
-{
-	dREQ;
-	
-        req->type = ix;
-	req->sv1  = newSVsv (pathname);
-	req->ptr1 = SvPVbyte_nolen (req->sv1);
-
-	EIO_SEND;
-}
-
-void
-aio_link (SV8 *oldpath, SV8 *newpath, SV *callback=&PL_sv_undef)
-        ALIAS:
-           aio_link    = EIO_LINK
-           aio_symlink = EIO_SYMLINK
-           aio_rename  = EIO_RENAME
-	PPCODE:
-{
-	dREQ;
-	
-        req->type = ix;
-	req->sv1  = newSVsv (oldpath);
-	req->ptr1 = SvPVbyte_nolen (req->sv1);
-	req->sv2  = newSVsv (newpath);
-	req->ptr2 = SvPVbyte_nolen (req->sv2);
-	
-	EIO_SEND;
-}
-
-void
-aio_mknod (SV8 *pathname, int mode, UV dev, SV *callback=&PL_sv_undef)
-	PPCODE:
-{
-	dREQ;
-	
-        req->type = EIO_MKNOD;
-	req->sv1  = newSVsv (pathname);
-	req->ptr1 = SvPVbyte_nolen (req->sv1);
-        req->int2 = (mode_t)mode;
-        req->offs = dev;
-	
-	EIO_SEND;
-}
-
-void
-aio_busy (double delay, SV *callback=&PL_sv_undef)
-	PPCODE:
-{
-	dREQ;
-
-        req->type = EIO_BUSY;
-        req->nv1  = delay < 0. ? 0. : delay;
-
-	EIO_SEND;
-}
-
-void
-aio_group (SV *callback=&PL_sv_undef)
-	PROTOTYPE: ;$
-        PPCODE:
-{
-	dREQ;
-
-        req->type = EIO_GROUP;
-
-        req_send (req);
-        XPUSHs (req_sv (req, AIO_GRP_KLASS));
-}
-
-void
-aio_nop (SV *callback=&PL_sv_undef)
-	ALIAS:
-           aio_nop  = EIO_NOP
-           aio_sync = EIO_SYNC
-	PPCODE:
-{
-	dREQ;
-
-#endif
+/*****************************************************************************/
+/* grp functions */
 
 void eio_grp_feed (eio_req *grp, void (*feed)(eio_req *req), int limit)
 {
@@ -1599,4 +1287,18 @@ void eio_grp_add (eio_req *grp, eio_req *req)
   grp->grp_first = req;
 }
 
+/*****************************************************************************/
+/* misc garbage */
+
+ssize_t eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count)
+{
+  worker wrk;
+
+  wrk.dbuf = 0;
+
+  eio__sendfile (ofd, ifd, offset, count, &wrk);
+
+  if (wrk.dbuf)
+    free (wrk.dbuf);
+}
 
