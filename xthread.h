@@ -55,12 +55,17 @@ typedef pthread_t thread_t;
 static int
 thread_create (thread_t *tid, void *(*proc)(void *), void *arg)
 {
+  int res;
   pthread_attr_t attr;
 
   pthread_attr_init (&attr);
   pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED);
 
-  return pthread_create (tid, &attr, proc, arg) == 0;
+  res = pthread_create (tid, &attr, proc, arg) == 0;
+
+  pthread_attr_destroy (&attr);
+
+  return res;
 }
 
 #define respipe_read(a,b,c)  PerlSock_recv ((a), (b), (c), 0)
@@ -130,6 +135,8 @@ thread_create (thread_t *tid, void *(*proc)(void *), void *arg)
   pthread_sigmask (SIG_SETMASK, &fullsigset, &oldsigset);
   retval = pthread_create (tid, &attr, proc, arg) == 0;
   pthread_sigmask (SIG_SETMASK, &oldsigset, 0);
+
+  pthread_attr_destroy (&attr);
 
   return retval;
 }
