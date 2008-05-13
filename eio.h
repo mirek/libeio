@@ -115,6 +115,7 @@ unsigned int eio_nthreads (void); /* number of worker threads in use currently *
 /*****************************************************************************/
 /* high-level request API */
 
+#ifndef EIO_NO_WRAPPERS
 eio_req *eio_nop       (int pri, eio_cb cb, void *data); /* does nothing except go through the whole process */
 eio_req *eio_busy      (eio_tstamp delay, int pri, eio_cb cb, void *data); /* ties a thread for this long, simulating busyness */
 eio_req *eio_sync      (int pri, eio_cb cb, void *data);
@@ -147,6 +148,7 @@ eio_req *eio_mknod     (const char *path, mode_t mode, dev_t dev, int pri, eio_c
 eio_req *eio_link      (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_symlink   (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_rename    (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
+#endif
 
 /* for groups */
 eio_req *eio_grp       (eio_cb cb, void *data);

@@ -1073,6 +1073,8 @@ static void eio_api_destroy (eio_req *req)
       return 0;							\
     }
 
+#ifndef EIO_NO_WRAPPERS
+
 eio_req *eio_nop (int pri, eio_cb cb, void *data)
 {
   REQ (EIO_NOP); SEND;
@@ -1254,6 +1256,8 @@ eio_req *eio_rename (const char *path, const char *new_path, int pri, eio_cb cb,
 {
   return eio__2path (EIO_RENAME, path, new_path, pri, cb, data);
 }
+
+#endif
 
 eio_req *eio_grp (eio_cb cb, void *data)
 {
