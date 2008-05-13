@@ -78,7 +78,7 @@ enum {
   EIO_PRI_MIN     = -4,
   EIO_PRI_MAX     =  4,
 
-  EIO_DEFAULT_PRI = 0,
+  EIO_PRI_DEFAULT = 0,
   EIO_PRI_BIAS    = -EIO_PRI_MIN,
   EIO_NUM_PRI     = EIO_PRI_MAX + EIO_PRI_BIAS + 1
 };
@@ -114,41 +114,41 @@ unsigned int eio_nthreads (void); /* number of worker threads in use currently *
 /*****************************************************************************/
 /* high-level request API */
 
-eio_req *eio_nop       (eio_cb cb); /* does nothing except go through the whole process */
-eio_req *eio_busy      (eio_tstamp delay, eio_cb cb); /* ties a thread for this long, simulating busyness */
-eio_req *eio_sync      (eio_cb cb);
-eio_req *eio_fsync     (int fd, eio_cb cb);
-eio_req *eio_fdatasync (int fd, eio_cb cb);
-eio_req *eio_close     (int fd, eio_cb cb);
-eio_req *eio_readahead (int fd, off_t offset, size_t length, eio_cb cb);
-eio_req *eio_read      (int fd, void *data, size_t length, off_t offset, eio_cb cb);
-eio_req *eio_write     (int fd, void *data, size_t length, off_t offset, eio_cb cb);
-eio_req *eio_fstat     (int fd, eio_cb cb); /* stat buffer=ptr2 allocated dynamically */
-eio_req *eio_futime    (int fd, eio_tstamp atime, eio_tstamp mtime, eio_cb cb);
-eio_req *eio_ftruncate (int fd, off_t offset, eio_cb cb);
-eio_req *eio_fchmod    (int fd, mode_t mode, eio_cb cb);
-eio_req *eio_fchown    (int fd, uid_t uid, gid_t gid, eio_cb cb);
-eio_req *eio_dup2      (int fd, int fd2, eio_cb cb);
-eio_req *eio_sendfile  (int out_fd, int in_fd, off_t in_offset, size_t length, eio_cb cb);
-eio_req *eio_open      (const char *path, int flags, mode_t mode, eio_cb cb);
-eio_req *eio_utime     (const char *path, eio_tstamp atime, eio_tstamp mtime, eio_cb cb);
-eio_req *eio_truncate  (const char *path, off_t offset, eio_cb cb);
-eio_req *eio_chown     (const char *path, uid_t uid, gid_t gid, eio_cb cb);
-eio_req *eio_chmod     (const char *path, mode_t mode, eio_cb cb);
-eio_req *eio_mkdir     (const char *path, mode_t mode, eio_cb cb);
-eio_req *eio_readdir   (const char *path, eio_cb cb); /* result=ptr2 allocated dynamically */
-eio_req *eio_rmdir     (const char *path, eio_cb cb);
-eio_req *eio_unlink    (const char *path, eio_cb cb);
-eio_req *eio_readlink  (const char *path, eio_cb cb); /* result=ptr2 allocated dynamically */
-eio_req *eio_stat      (const char *path, eio_cb cb); /* stat buffer=ptr2 allocated dynamically */
-eio_req *eio_lstat     (const char *path, eio_cb cb); /* stat buffer=ptr2 allocated dynamically */
-eio_req *eio_mknod     (const char *path, mode_t mode, dev_t dev, eio_cb cb);
-eio_req *eio_link      (const char *path, const char *new_path, eio_cb cb);
-eio_req *eio_symlink   (const char *path, const char *new_path, eio_cb cb);
-eio_req *eio_rename    (const char *path, const char *new_path, eio_cb cb);
+eio_req *eio_nop       (int pri, eio_cb cb, void *data); /* does nothing except go through the whole process */
+eio_req *eio_busy      (eio_tstamp delay, int pri, eio_cb cb, void *data); /* ties a thread for this long, simulating busyness */
+eio_req *eio_sync      (int pri, eio_cb cb, void *data);
+eio_req *eio_fsync     (int fd, int pri, eio_cb cb, void *data);
+eio_req *eio_fdatasync (int fd, int pri, eio_cb cb, void *data);
+eio_req *eio_close     (int fd, int pri, eio_cb cb, void *data);
+eio_req *eio_readahead (int fd, off_t offset, size_t length, int pri, eio_cb cb, void *data);
+eio_req *eio_read      (int fd, void *buf, size_t length, off_t offset, int pri, eio_cb cb, void *data);
+eio_req *eio_write     (int fd, void *buf, size_t length, off_t offset, int pri, eio_cb cb, void *data);
+eio_req *eio_fstat     (int fd, int pri, eio_cb cb, void *data); /* stat buffer=ptr2 allocated dynamically */
+eio_req *eio_futime    (int fd, eio_tstamp atime, eio_tstamp mtime, int pri, eio_cb cb, void *data);
+eio_req *eio_ftruncate (int fd, off_t offset, int pri, eio_cb cb, void *data);
+eio_req *eio_fchmod    (int fd, mode_t mode, int pri, eio_cb cb, void *data);
+eio_req *eio_fchown    (int fd, uid_t uid, gid_t gid, int pri, eio_cb cb, void *data);
+eio_req *eio_dup2      (int fd, int fd2, int pri, eio_cb cb, void *data);
+eio_req *eio_sendfile  (int out_fd, int in_fd, off_t in_offset, size_t length, int pri, eio_cb cb, void *data);
+eio_req *eio_open      (const char *path, int flags, mode_t mode, int pri, eio_cb cb, void *data);
+eio_req *eio_utime     (const char *path, eio_tstamp atime, eio_tstamp mtime, int pri, eio_cb cb, void *data);
+eio_req *eio_truncate  (const char *path, off_t offset, int pri, eio_cb cb, void *data);
+eio_req *eio_chown     (const char *path, uid_t uid, gid_t gid, int pri, eio_cb cb, void *data);
+eio_req *eio_chmod     (const char *path, mode_t mode, int pri, eio_cb cb, void *data);
+eio_req *eio_mkdir     (const char *path, mode_t mode, int pri, eio_cb cb, void *data);
+eio_req *eio_readdir   (const char *path, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */
+eio_req *eio_rmdir     (const char *path, int pri, eio_cb cb, void *data);
+eio_req *eio_unlink    (const char *path, int pri, eio_cb cb, void *data);
+eio_req *eio_readlink  (const char *path, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */
+eio_req *eio_stat      (const char *path, int pri, eio_cb cb, void *data); /* stat buffer=ptr2 allocated dynamically */
+eio_req *eio_lstat     (const char *path, int pri, eio_cb cb, void *data); /* stat buffer=ptr2 allocated dynamically */
+eio_req *eio_mknod     (const char *path, mode_t mode, dev_t dev, int pri, eio_cb cb, void *data);
+eio_req *eio_link      (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
+eio_req *eio_symlink   (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
+eio_req *eio_rename    (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 
 /* for groups */
-eio_req *eio_grp       (eio_cb cb);
+eio_req *eio_grp       (eio_cb cb, void *data);
 void eio_grp_feed      (eio_req *grp, void (*feed)(eio_req *req), int limit);
 void eio_grp_limit     (eio_req *grp, int limit);
 void eio_grp_add       (eio_req *grp, eio_req *req);

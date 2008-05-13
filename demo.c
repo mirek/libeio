@@ -128,92 +128,63 @@ main (void)
   do
     {
       /* avoid relative paths yourself(!) */
-      eio_mkdir ("eio-test-dir", 0777, res_cb)
-        ->data = "mkdir";
-      eio_nop (res_cb)
-        ->data = "nop";
+      eio_mkdir ("eio-test-dir", 0777, 0, res_cb, "mkdir");
+      eio_nop (0, res_cb, "nop");
       event_loop ();
 
-      eio_stat ("eio-test-dir", stat_cb);
-      eio_lstat ("eio-test-dir", stat_cb);
-      eio_open ("eio-test-dir/eio-test-file", O_RDWR | O_CREAT, 0777, open_cb);
-      eio_symlink ("test", "eio-test-dir/eio-symlink", res_cb)
-        ->data = "symlink";
-      eio_mknod ("eio-test-dir/eio-fifo", S_IFIFO, 0, res_cb)
-        ->data = "mknod";
+      eio_stat ("eio-test-dir", 0, stat_cb, "stat");
+      eio_lstat ("eio-test-dir", 0, stat_cb, "stat");
+      eio_open ("eio-test-dir/eio-test-file", O_RDWR | O_CREAT, 0777, 0, open_cb, "open");
+      eio_symlink ("test", "eio-test-dir/eio-symlink", 0, res_cb, "symlink");
+      eio_mknod ("eio-test-dir/eio-fifo", S_IFIFO, 0, 0, res_cb, "mknod");
       event_loop ();
 
-      eio_utime ("eio-test-dir", 12345.678, 23456.789, res_cb)
-        ->data = "utime";
-      eio_futime (last_fd, 92345.678, 93456.789, res_cb)
-        ->data = "futime";
-      eio_chown ("eio-test-dir", getuid (), getgid (), res_cb)
-        ->data = "chown";
-      eio_fchown (last_fd, getuid (), getgid (), res_cb)
-        ->data = "fchown";
-      eio_fchmod (last_fd, 0123, res_cb)
-        ->data = "fchmod";
-      eio_readdir ("eio-test-dir", readdir_cb);
-      eio_readdir ("/nonexistant", readdir_cb);
-      eio_fstat (last_fd, stat_cb);
-      eio_write (last_fd, "test\nfail\n", 10, 4, res_cb)
-        ->data = "write";
+      eio_utime ("eio-test-dir", 12345.678, 23456.789, 0, res_cb, "utime");
+      eio_futime (last_fd, 92345.678, 93456.789, 0, res_cb, "futime");
+      eio_chown ("eio-test-dir", getuid (), getgid (), 0, res_cb, "chown");
+      eio_fchown (last_fd, getuid (), getgid (), 0, res_cb, "fchown");
+      eio_fchmod (last_fd, 0123, 0, res_cb, "fchmod");
+      eio_readdir ("eio-test-dir", 0, readdir_cb, "readdir");
+      eio_readdir ("/nonexistant", 0, readdir_cb, "readdir");
+      eio_fstat (last_fd, 0, stat_cb, "stat");
+      eio_write (last_fd, "test\nfail\n", 10, 4, 0, res_cb, "write");
       event_loop ();
 
-      eio_read (last_fd, 0, 8, 0, read_cb);
-      eio_readlink ("eio-test-dir/eio-symlink", res_cb)
-        ->data = "readlink";
+      eio_read (last_fd, 0, 8, 0, EIO_PRI_DEFAULT, read_cb, "read");
+      eio_readlink ("eio-test-dir/eio-symlink", 0, res_cb, "readlink");
       event_loop ();
 
-      eio_dup2 (1, 2, res_cb) // dup stdout to stderr
-        ->data = "dup2";
-      eio_chmod ("eio-test-dir", 0765, res_cb)
-        ->data = "chmod";
-      eio_ftruncate (last_fd, 9, res_cb)
-        ->data = "ftruncate";
-      eio_fdatasync (last_fd, res_cb)
-        ->data = "fdatasync";
-      eio_fsync (last_fd, res_cb)
-        ->data = "fsync";
-      eio_sync (res_cb)
-        ->data = "sync";
-      eio_busy (0.5, res_cb)
-        ->data = "busy";
+      eio_dup2 (1, 2, EIO_PRI_DEFAULT, res_cb, "dup"); // dup stdout to stderr
+      eio_chmod ("eio-test-dir", 0765, 0, res_cb, "chmod");
+      eio_ftruncate (last_fd, 9, 0, res_cb, "ftruncate");
+      eio_fdatasync (last_fd, 0, res_cb, "fdatasync");
+      eio_fsync (last_fd, 0, res_cb, "fsync");
+      eio_sync (0, res_cb, "sync");
+      eio_busy (0.5, 0, res_cb, "busy");
       event_loop ();
 
-      eio_sendfile (1, last_fd, 4, 5, res_cb) // write "test\n" to stdout
-        ->data = "sendfile";
-      eio_fstat (last_fd, stat_cb);
+      eio_sendfile (1, last_fd, 4, 5, 0, res_cb, "sendfile"); // write "test\n" to stdout
+      eio_fstat (last_fd, 0, stat_cb, "stat");
       event_loop ();
 
-      eio_truncate ("eio-test-dir/eio-test-file", 6, res_cb)
-        ->data = "truncate";
-      eio_readahead (last_fd, 0, 64, res_cb)
-        ->data = "readahead";
+      eio_truncate ("eio-test-dir/eio-test-file", 6, 0, res_cb, "truncate");
+      eio_readahead (last_fd, 0, 64, 0, res_cb, "readahead");
       event_loop ();
 
-      eio_close (last_fd, res_cb)
-        ->data = "close";
-      eio_link ("eio-test-dir/eio-test-file", "eio-test-dir/eio-test-file-2", res_cb)
-        ->data = "link";
+      eio_close (last_fd, 0, res_cb, "close");
+      eio_link ("eio-test-dir/eio-test-file", "eio-test-dir/eio-test-file-2", 0, res_cb, "link");
       event_loop ();
 
-      eio_rename ("eio-test-dir/eio-test-file", "eio-test-dir/eio-test-file-renamed", res_cb)
-        ->data = "rename";
+      eio_rename ("eio-test-dir/eio-test-file", "eio-test-dir/eio-test-file-renamed", 0, res_cb, "rename");
       event_loop ();
 
-      eio_unlink ("eio-test-dir/eio-fifo", res_cb)
-        ->data = "unlink";
-      eio_unlink ("eio-test-dir/eio-symlink", res_cb)
-        ->data = "unlink";
-      eio_unlink ("eio-test-dir/eio-test-file-2", res_cb)
-        ->data = "unlink";
-      eio_unlink ("eio-test-dir/eio-test-file-renamed", res_cb)
-        ->data = "unlink";
+      eio_unlink ("eio-test-dir/eio-fifo", 0, res_cb, "unlink");
+      eio_unlink ("eio-test-dir/eio-symlink", 0, res_cb, "unlink");
+      eio_unlink ("eio-test-dir/eio-test-file-2", 0, res_cb, "unlink");
+      eio_unlink ("eio-test-dir/eio-test-file-renamed", 0, res_cb, "unlink");
       event_loop ();
 
-      eio_rmdir ("eio-test-dir", res_cb)
-        ->data = "rmdir";
+      eio_rmdir ("eio-test-dir", 0, res_cb, "rmdir");
       event_loop ();
     }
   while (0);
