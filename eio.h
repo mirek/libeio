@@ -9,7 +9,7 @@ typedef struct eio_req eio_req;
 typedef int (*eio_cb)(eio_req *req);
 
 #ifndef EIO_COMMON
-# define EIO_COMMON void *data
+# define EIO_COMMON
 #endif
 
 #ifndef EIO_STRUCT_STAT
@@ -57,13 +57,14 @@ struct eio_req
   int errorno;     /* errno value on syscall return */
 
   unsigned char flags; /* private */
-  unsigned char pri; /* the priority */
+  signed char pri;     /* the priority */
 
+  void *data;
   eio_cb finish;
-  void (*destroy)(eio_req *req);
-  void (*feed)(eio_req *req);
+  void (*destroy)(eio_req *req); /* called when requets no longer needed */
+  void (*feed)(eio_req *req);    /* only used for group requests */
 
-  EIO_COMMON;
+  EIO_REQ_MEMBERS
 
   eio_req *grp, *grp_prev, *grp_next, *grp_first; /* private */
 };
