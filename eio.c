@@ -358,6 +358,11 @@ static void maybe_start_thread (void)
 
 void eio_submit (eio_req *req)
 {
+  req->pri += EIO_PRI_BIAS;
+
+  if (req->pri < EIO_PRI_MIN + EIO_PRI_BIAS) req->pri = EIO_PRI_MIN + EIO_PRI_BIAS;
+  if (req->pri > EIO_PRI_MAX + EIO_PRI_BIAS) req->pri = EIO_PRI_MAX + EIO_PRI_BIAS;
+
   ++nreqs;
 
   X_LOCK (reqlock);
@@ -1051,9 +1056,10 @@ static void eio_api_destroy (eio_req *req)
   if (!req)                                                     \
     return 0;                                                   \
                                                                 \
-  req->type = rtype;                                            \
-  req->pri = EIO_DEFAULT_PRI + EIO_PRI_BIAS;                    \
-  req->finish = cb;						\
+  req->type    = rtype;                                         \
+  req->pri     = pri;						\
+  req->finish  = cb;						\
+  req->data    = data;						\
   req->destroy = eio_api_destroy;
 
 #define SEND eio_submit (req); return req

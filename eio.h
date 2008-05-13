@@ -8,8 +8,8 @@ typedef struct eio_req eio_req;
 
 typedef int (*eio_cb)(eio_req *req);
 
-#ifndef EIO_COMMON
-# define EIO_COMMON
+#ifndef EIO_REQ_MEMBERS
+# define EIO_REQ_MEMBERS
 #endif
 
 #ifndef EIO_STRUCT_STAT
