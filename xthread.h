@@ -37,13 +37,11 @@ typedef int ssize_t;
 
 typedef pthread_mutex_t mutex_t;
 #define X_MUTEX_INIT           PTHREAD_MUTEX_INITIALIZER
-#define X_MUTEX_CHECK(mutex)   
 #define X_LOCK(mutex)          pthread_mutex_lock (&(mutex))
 #define X_UNLOCK(mutex)        pthread_mutex_unlock (&(mutex))
 
 typedef pthread_cond_t cond_t;
 #define X_COND_INIT                     PTHREAD_COND_INITIALIZER
-#define X_COND_CHECK(cond)              
 #define X_COND_SIGNAL(cond)             pthread_cond_signal (&(cond))
 #define X_COND_WAIT(cond,mutex)         pthread_cond_wait (&(cond), &(mutex))
 #define X_COND_TIMEDWAIT(cond,mutex,to) pthread_cond_timedwait (&(cond), &(mutex), &(to))

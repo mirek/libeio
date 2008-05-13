@@ -113,7 +113,7 @@ unsigned int eio_npending (void); /* numbe rof finished but unhandled requests *
 unsigned int eio_nthreads (void); /* number of worker threads in use currently */
 
 /*****************************************************************************/
-/* high-level request API */
+/* convinience wrappers */
 
 #ifndef EIO_NO_WRAPPERS
 eio_req *eio_nop       (int pri, eio_cb cb, void *data); /* does nothing except go through the whole process */
@@ -150,17 +150,17 @@ eio_req *eio_symlink   (const char *path, const char *new_path, int pri, eio_cb 
 eio_req *eio_rename    (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 #endif
 
-/* for groups */
+/*****************************************************************************/
+/* groups */
+
 eio_req *eio_grp       (eio_cb cb, void *data);
 void eio_grp_feed      (eio_req *grp, void (*feed)(eio_req *req), int limit);
 void eio_grp_limit     (eio_req *grp, int limit);
 void eio_grp_add       (eio_req *grp, eio_req *req);
 void eio_grp_cancel    (eio_req *grp); /* cancels all sub requests but not the group */
 
-/* cancel a request as soon fast as possible */
-void eio_cancel (eio_req *req);
-/* destroy a request that has never been submitted */
-void eio_destroy (eio_req *req);
+/*****************************************************************************/
+/* request api */
 
 /* true if the request was cancelled, useful in the invoke callback */
 #define EIO_CANCELLED(req) ((req)->flags & EIO_FLAG_CANCELLED)
@@ -171,18 +171,12 @@ void eio_destroy (eio_req *req);
 #define EIO_STAT_BUF(req)  ((EIO_STRUCT_STAT *)EIO_BUF(req))
 #define EIO_PATH(req)      ((char *)(req)->ptr1)
 
-/*****************************************************************************/
-/* low-level request API */
-
-/* must be used to initialise eio_req's */
-#define EIO_INIT(req,prio,finish_cb, destroy_cb)	\
-  memset ((req), 0, sizeof (eio_req));	\
-  (req)->pri = (prio) + EIO_PRI_BIAS;	\
-  (req)->finish  = (finish_cb);		\
-  (req)->destroy = (destroy_cb)
-
 /* submit a request for execution */
 void eio_submit (eio_req *req);
+/* cancel a request as soon fast as possible, if possible */
+void eio_cancel (eio_req *req);
+/* destroy a request that has never been submitted */
+void eio_destroy (eio_req *req);
 
 /*****************************************************************************/
 /* convinience functions */
