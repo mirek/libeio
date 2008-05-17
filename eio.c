@@ -125,10 +125,14 @@
 #define ETP_PRI_MIN EIO_PRI_MIN
 #define ETP_PRI_MAX EIO_PRI_MAX
 
+struct etp_worker;
+
 #define ETP_REQ eio_req
 #define ETP_DESTROY(req) eio_destroy (req)
 static int eio_finish (eio_req *req);
 #define ETP_FINISH(req)  eio_finish (req)
+static void eio_execute (struct etp_worker *self, eio_req *req);
+#define ETP_EXECUTE(wrk,req) eio_execute (wrk,req)
 
 #define ETP_WORKER_CLEAR(req)	\
   if (wrk->dbuf)		\
@@ -1049,109 +1053,11 @@ X_THREAD_PROC (etp_proc)
 
       X_UNLOCK (reqlock);
      
-      errno = 0; /* strictly unnecessary */
+      if (req->type < 0)
+        goto quit;
 
       if (!EIO_CANCELLED (req))
-        switch (req->type)
-          {
-            case EIO_READ:      ALLOC (req->size);
-                                req->result = req->offs >= 0
-                                            ? pread     (req->int1, req->ptr2, req->size, req->offs)
-                                            : read      (req->int1, req->ptr2, req->size); break;
-            case EIO_WRITE:     req->result = req->offs >= 0
-                                            ? pwrite    (req->int1, req->ptr2, req->size, req->offs)
-                                            : write     (req->int1, req->ptr2, req->size); break;
-
-            case EIO_READAHEAD: req->result = readahead     (req->int1, req->offs, req->size); break;
-            case EIO_SENDFILE:  req->result = eio__sendfile (req->int1, req->int2, req->offs, req->size, self); break;
-
-            case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
-                                req->result = stat      (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
-            case EIO_LSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
-                                req->result = lstat     (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
-            case EIO_FSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
-                                req->result = fstat     (req->int1, (EIO_STRUCT_STAT *)req->ptr2); break;
-
-            case EIO_CHOWN:     req->result = chown     (req->ptr1, req->int2, req->int3); break;
-            case EIO_FCHOWN:    req->result = fchown    (req->int1, req->int2, req->int3); break;
-            case EIO_CHMOD:     req->result = chmod     (req->ptr1, (mode_t)req->int2); break;
-            case EIO_FCHMOD:    req->result = fchmod    (req->int1, (mode_t)req->int2); break;
-            case EIO_TRUNCATE:  req->result = truncate  (req->ptr1, req->offs); break;
-            case EIO_FTRUNCATE: req->result = ftruncate (req->int1, req->offs); break;
-
-            case EIO_OPEN:      req->result = open      (req->ptr1, req->int1, (mode_t)req->int2); break;
-            case EIO_CLOSE:     req->result = close     (req->int1); break;
-            case EIO_DUP2:      req->result = dup2      (req->int1, req->int2); break;
-            case EIO_UNLINK:    req->result = unlink    (req->ptr1); break;
-            case EIO_RMDIR:     req->result = rmdir     (req->ptr1); break;
-            case EIO_MKDIR:     req->result = mkdir     (req->ptr1, (mode_t)req->int2); break;
-            case EIO_RENAME:    req->result = rename    (req->ptr1, req->ptr2); break;
-            case EIO_LINK:      req->result = link      (req->ptr1, req->ptr2); break;
-            case EIO_SYMLINK:   req->result = symlink   (req->ptr1, req->ptr2); break;
-            case EIO_MKNOD:     req->result = mknod     (req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
-
-            case EIO_READLINK:  ALLOC (NAME_MAX);
-                                req->result = readlink  (req->ptr1, req->ptr2, NAME_MAX); break;
-
-            case EIO_SYNC:      req->result = 0; sync (); break;
-            case EIO_FSYNC:     req->result = fsync     (req->int1); break;
-            case EIO_FDATASYNC: req->result = fdatasync (req->int1); break;
-
-            case EIO_READDIR:   eio__scandir (req, self); break;
-
-            case EIO_BUSY:
-#ifdef _WIN32
-	      Sleep (req->nv1 * 1000.);
-#else
-              {
-                struct timeval tv;
-
-                tv.tv_sec  = req->nv1;
-                tv.tv_usec = (req->nv1 - tv.tv_sec) * 1000000.;
-
-                req->result = select (0, 0, 0, 0, &tv);
-              }
-#endif
-              break;
-
-            case EIO_UTIME:
-            case EIO_FUTIME:
-              {
-                struct timeval tv[2];
-                struct timeval *times;
-
-                if (req->nv1 != -1. || req->nv2 != -1.)
-                  {
-                    tv[0].tv_sec  = req->nv1;
-                    tv[0].tv_usec = (req->nv1 - tv[0].tv_sec) * 1000000.;
-                    tv[1].tv_sec  = req->nv2;
-                    tv[1].tv_usec = (req->nv2 - tv[1].tv_sec) * 1000000.;
-
-                    times = tv;
-                  }
-                else
-                  times = 0;
-
-
-                req->result = req->type == EIO_FUTIME
-                              ? futimes (req->int1, times)
-                              : utimes  (req->ptr1, times);
-              }
-
-            case EIO_GROUP:
-            case EIO_NOP:
-              req->result = 0;
-              break;
-
-            case -1:
-              goto quit;
-
-            default:
-              req->result = -1;
-              break;
-          }
-
-      req->errorno = errno;
+        ETP_EXECUTE (self, req);
 
       X_LOCK (reslock);
 
@@ -1209,6 +1115,113 @@ static void eio_api_destroy (eio_req *req)
       eio_api_destroy (req);					\
       return 0;							\
     }
+
+static void eio_execute (etp_worker *self, eio_req *req)
+{
+  errno = 0;
+
+  switch (req->type)
+    {
+      case EIO_READ:      ALLOC (req->size);
+                          req->result = req->offs >= 0
+                                      ? pread     (req->int1, req->ptr2, req->size, req->offs)
+                                      : read      (req->int1, req->ptr2, req->size); break;
+      case EIO_WRITE:     req->result = req->offs >= 0
+                                      ? pwrite    (req->int1, req->ptr2, req->size, req->offs)
+                                      : write     (req->int1, req->ptr2, req->size); break;
+
+      case EIO_READAHEAD: req->result = readahead     (req->int1, req->offs, req->size); break;
+      case EIO_SENDFILE:  req->result = eio__sendfile (req->int1, req->int2, req->offs, req->size, self); break;
+
+      case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
+                          req->result = stat      (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
+      case EIO_LSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
+                          req->result = lstat     (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
+      case EIO_FSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
+                          req->result = fstat     (req->int1, (EIO_STRUCT_STAT *)req->ptr2); break;
+
+      case EIO_CHOWN:     req->result = chown     (req->ptr1, req->int2, req->int3); break;
+      case EIO_FCHOWN:    req->result = fchown    (req->int1, req->int2, req->int3); break;
+      case EIO_CHMOD:     req->result = chmod     (req->ptr1, (mode_t)req->int2); break;
+      case EIO_FCHMOD:    req->result = fchmod    (req->int1, (mode_t)req->int2); break;
+      case EIO_TRUNCATE:  req->result = truncate  (req->ptr1, req->offs); break;
+      case EIO_FTRUNCATE: req->result = ftruncate (req->int1, req->offs); break;
+
+      case EIO_OPEN:      req->result = open      (req->ptr1, req->int1, (mode_t)req->int2); break;
+      case EIO_CLOSE:     req->result = close     (req->int1); break;
+      case EIO_DUP2:      req->result = dup2      (req->int1, req->int2); break;
+      case EIO_UNLINK:    req->result = unlink    (req->ptr1); break;
+      case EIO_RMDIR:     req->result = rmdir     (req->ptr1); break;
+      case EIO_MKDIR:     req->result = mkdir     (req->ptr1, (mode_t)req->int2); break;
+      case EIO_RENAME:    req->result = rename    (req->ptr1, req->ptr2); break;
+      case EIO_LINK:      req->result = link      (req->ptr1, req->ptr2); break;
+      case EIO_SYMLINK:   req->result = symlink   (req->ptr1, req->ptr2); break;
+      case EIO_MKNOD:     req->result = mknod     (req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
+
+      case EIO_READLINK:  ALLOC (NAME_MAX);
+                          req->result = readlink  (req->ptr1, req->ptr2, NAME_MAX); break;
+
+      case EIO_SYNC:      req->result = 0; sync (); break;
+      case EIO_FSYNC:     req->result = fsync     (req->int1); break;
+      case EIO_FDATASYNC: req->result = fdatasync (req->int1); break;
+
+      case EIO_READDIR:   eio__scandir (req, self); break;
+
+      case EIO_BUSY:
+#ifdef _WIN32
+	Sleep (req->nv1 * 1000.);
+#else
+        {
+          struct timeval tv;
+
+          tv.tv_sec  = req->nv1;
+          tv.tv_usec = (req->nv1 - tv.tv_sec) * 1000000.;
+
+          req->result = select (0, 0, 0, 0, &tv);
+        }
+#endif
+        break;
+
+      case EIO_UTIME:
+      case EIO_FUTIME:
+        {
+          struct timeval tv[2];
+          struct timeval *times;
+
+          if (req->nv1 != -1. || req->nv2 != -1.)
+            {
+              tv[0].tv_sec  = req->nv1;
+              tv[0].tv_usec = (req->nv1 - tv[0].tv_sec) * 1000000.;
+              tv[1].tv_sec  = req->nv2;
+              tv[1].tv_usec = (req->nv2 - tv[1].tv_sec) * 1000000.;
+
+              times = tv;
+            }
+          else
+            times = 0;
+
+
+          req->result = req->type == EIO_FUTIME
+                        ? futimes (req->int1, times)
+                        : utimes  (req->ptr1, times);
+        }
+
+      case EIO_GROUP:
+      case EIO_NOP:
+        req->result = 0;
+        break;
+
+      case EIO_CUSTOM:
+        req->feed (req);
+        break;
+
+      default:
+        req->result = -1;
+        break;
+    }
+
+  req->errorno = errno;
+}
 
 #ifndef EIO_NO_WRAPPERS
 
@@ -1392,6 +1405,11 @@ eio_req *eio_symlink (const char *path, const char *new_path, int pri, eio_cb cb
 eio_req *eio_rename (const char *path, const char *new_path, int pri, eio_cb cb, void *data)
 {
   return eio__2path (EIO_RENAME, path, new_path, pri, cb, data);
+}
+
+eio_req *eio_custom (eio_cb execute, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_CUSTOM); req->feed = execute; SEND;
 }
 
 #endif

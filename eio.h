@@ -69,7 +69,7 @@ enum {
   EIO_MKNOD, EIO_READDIR,
   EIO_LINK, EIO_SYMLINK, EIO_READLINK,
   EIO_GROUP, EIO_NOP,
-  EIO_BUSY,
+  EIO_BUSY, EIO_CUSTOM
 };
 
 typedef double eio_tstamp; /* feel free to use double in your code directly */
@@ -116,8 +116,7 @@ enum {
 enum {
   EIO_PRI_MIN     = -4,
   EIO_PRI_MAX     =  4,
-
-  EIO_PRI_DEFAULT = 0,
+  EIO_PRI_DEFAULT =  0,
 };
 
 /* returns < 0 on error, errno set
@@ -184,6 +183,7 @@ eio_req *eio_mknod     (const char *path, mode_t mode, dev_t dev, int pri, eio_c
 eio_req *eio_link      (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_symlink   (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_rename    (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
+eio_req *eio_custom    (eio_cb execute, int pri, eio_cb cb, void *data);
 #endif
 
 /*****************************************************************************/
