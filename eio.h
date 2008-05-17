@@ -1,3 +1,42 @@
+/*
+ * libeio API header
+ *
+ * Copyright (c) 2007,2008 Marc Alexander Lehmann <libeio@schmorp.de>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modifica-
+ * tion, are permitted provided that the following conditions are met:
+ * 
+ *   1.  Redistributions of source code must retain the above copyright notice,
+ *       this list of conditions and the following disclaimer.
+ * 
+ *   2.  Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MER-
+ * CHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
+ * EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPE-
+ * CIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTH-
+ * ERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Alternatively, the contents of this file may be used under the terms of
+ * the GNU General Public License ("GPL") version 2 or any later version,
+ * in which case the provisions of the GPL are applicable instead of
+ * the above. If you wish to allow the use of your version of this file
+ * only under the terms of the GPL and not to allow others to use your
+ * version of this file under the BSD license, indicate your decision
+ * by deleting the provisions above and replace them with the notice
+ * and other provisions required by the GPL. If you do not delete the
+ * provisions above, a recipient may use your version of this file under
+ * either the BSD or the GPL.
+ */
+
 #ifndef EIO_H_
 #define EIO_H_
 
@@ -17,7 +56,6 @@ typedef int (*eio_cb)(eio_req *req);
 #endif
 
 enum {
-  EIO_QUIT,
   EIO_OPEN, EIO_CLOSE, EIO_DUP2,
   EIO_READ, EIO_WRITE,
   EIO_READAHEAD, EIO_SENDFILE,
@@ -40,7 +78,7 @@ typedef double eio_tstamp; /* feel free to use double in your code directly */
 /* this structure is mostly read-only */
 struct eio_req
 {
-  eio_req volatile *next; /* private */
+  eio_req volatile *next; /* private ETP */
 
   ssize_t result;  /* result of syscall, e.g. result = read (... */
   off_t offs;      /* read, write, truncate, readahead: file offset; mknod: dev_t */
@@ -50,7 +88,7 @@ struct eio_req
   eio_tstamp nv1;  /* utime, futime: atime; busy: sleep time */
   eio_tstamp nv2;  /* utime, futime: mtime */
 
-  int type;        /* EIO_xxx constant */
+  int type;        /* EIO_xxx constant ETP */
   int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open: flags */
   long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode */
   long int3;       /* chown, fchown: gid */
@@ -80,8 +118,6 @@ enum {
   EIO_PRI_MAX     =  4,
 
   EIO_PRI_DEFAULT = 0,
-  EIO_PRI_BIAS    = -EIO_PRI_MIN,
-  EIO_NUM_PRI     = EIO_PRI_MAX + EIO_PRI_BIAS + 1
 };
 
 /* returns < 0 on error, errno set
