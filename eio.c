@@ -316,16 +316,10 @@ static void etp_atfork_prepare (void)
 #if !HAVE_PREADWRITE
   X_LOCK (preadwritelock);
 #endif
-#if !HAVE_READDIR_R
-  X_LOCK (readdirlock);
-#endif
 }
 
 static void etp_atfork_parent (void)
 {
-#if !HAVE_READDIR_R
-  X_UNLOCK (readdirlock);
-#endif
 #if !HAVE_PREADWRITE
   X_UNLOCK (preadwritelock);
 #endif
@@ -803,37 +797,6 @@ eio__readahead (int fd, off_t offset, size_t count, worker *self)
 
 #endif
 
-#if !HAVE_READDIR_R
-# define readdir_r eio__readdir_r
-
-static mutex_t readdirlock = X_MUTEX_INIT;
-  
-static int
-eio__readdir_r (DIR *dirp, EIO_STRUCT_DIRENT *ent, EIO_STRUCT_DIRENT **res)
-{
-  EIO_STRUCT_DIRENT *e;
-  int errorno;
-
-  X_LOCK (readdirlock);
-
-  e = readdir (dirp);
-  errorno = errno;
-
-  if (e)
-    {
-      *res = ent;
-      strcpy (ent->d_name, e->d_name);
-    }
-  else
-    *res = 0;
-
-  X_UNLOCK (readdirlock);
-
-  errno = errorno;
-  return e ? 0 : -1;
-}
-#endif
-
 /* sendfile always needs emulation */
 static ssize_t
 eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
@@ -933,11 +896,6 @@ static void
 eio__scandir (eio_req *req, etp_worker *self)
 {
   DIR *dirp;
-  union
-  {    
-    EIO_STRUCT_DIRENT d;
-    char b [offsetof (EIO_STRUCT_DIRENT, d_name) + NAME_MAX + 1];
-  } *u;
   EIO_STRUCT_DIRENT *entp;
   char *name, *names;
   int memlen = 4096;
@@ -946,16 +904,15 @@ eio__scandir (eio_req *req, etp_worker *self)
 
   X_LOCK (wrklock);
   self->dirp = dirp = opendir (req->ptr1);
-  self->dbuf = u = malloc (sizeof (*u));
   req->flags |= EIO_FLAG_PTR2_FREE;
   req->ptr2 = names = malloc (memlen);
   X_UNLOCK (wrklock);
 
-  if (dirp && u && names)
+  if (dirp && names)
     for (;;)
       {
         errno = 0;
-        readdir_r (dirp, &u->d, &entp);
+        entp = readdir (dirp);
 
         if (!entp)
           break;

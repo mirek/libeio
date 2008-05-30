@@ -60,18 +60,6 @@ int main(void)
 ],ac_cv_preadwrite=yes,ac_cv_preadwrite=no)])
 test $ac_cv_preadwrite = yes && AC_DEFINE(HAVE_PREADWRITE, 1, pread(2) and pwrite(2) are available)
 
-AC_CACHE_CHECK(for readdir_r, ac_cv_readdir_r, [AC_LINK_IFELSE([
-#include <dirent.h>
-int main(void)
-{
-   DIR *dir = 0;
-   struct dirent ent, *eres;
-   int res = readdir_r (dir, &ent, &eres);
-   return 0;
-}
-],ac_cv_readdir_r=yes,ac_cv_readdir_r=no)])
-test $ac_cv_readdir_r = yes && AC_DEFINE(HAVE_READDIR_R, 1, readdir_r is available)
-
 AC_CACHE_CHECK(for sendfile, ac_cv_sendfile, [AC_LINK_IFELSE([
 # include <sys/types.h>
 #if __linux
