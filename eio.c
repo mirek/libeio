@@ -777,7 +777,7 @@ static int eio__futimes (int fd, const struct timeval tv[2])
 # define readahead(fd,offset,count) eio__readahead (fd, offset, count, self)
 
 static ssize_t
-eio__readahead (int fd, off_t offset, size_t count, worker *self)
+eio__readahead (int fd, off_t offset, size_t count, etp_worker *self)
 {
   size_t todo = count;
   dBUF;

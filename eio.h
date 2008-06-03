@@ -40,6 +40,10 @@
 #ifndef EIO_H_
 #define EIO_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 #include <sys/types.h>
 
@@ -218,6 +222,10 @@ void eio_destroy (eio_req *req);
 /* convinience functions */
 
 ssize_t eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
