@@ -373,6 +373,8 @@ etp_init (void (*want_poll)(void), void (*done_poll)(void))
 
   want_poll_cb = want_poll;
   done_poll_cb = done_poll;
+
+  return 0;
 }
 
 X_THREAD_PROC (etp_proc);
@@ -1041,7 +1043,7 @@ quit:
 
 int eio_init (void (*want_poll)(void), void (*done_poll)(void))
 {
-  etp_init (want_poll, done_poll);
+  return etp_init (want_poll, done_poll);
 }
 
 static void eio_api_destroy (eio_req *req)
