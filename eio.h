@@ -85,7 +85,7 @@ struct eio_req
   eio_req volatile *next; /* private ETP */
 
   ssize_t result;  /* result of syscall, e.g. result = read (... */
-  off_t offs;      /* read, write, truncate, readahead: file offset; mknod: dev_t */
+  off_t offs;      /* read, write, truncate, readahead: file offset */
   size_t size;     /* read, write, readahead, sendfile: length */
   void *ptr1;      /* all applicable requests: pathname, old name */
   void *ptr2;      /* all applicable requests: new name or memory buffer */
@@ -95,7 +95,7 @@ struct eio_req
   int type;        /* EIO_xxx constant ETP */
   int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open: flags */
   long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode */
-  long int3;       /* chown, fchown: gid */
+  long int3;       /* chown, fchown: gid; mknod: dev_t */
   int errorno;     /* errno value on syscall return */
 
   unsigned char flags; /* private */
