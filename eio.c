@@ -905,6 +905,7 @@ eio__scandir (eio_req *req, etp_worker *self)
   int res = 0;
 
   X_LOCK (wrklock);
+  /* the corresponding closedir is in ETP_WORKER_CLEAR */
   self->dirp = dirp = opendir (req->ptr1);
   req->flags |= EIO_FLAG_PTR2_FREE;
   req->ptr2 = names = malloc (memlen);
