@@ -332,10 +332,10 @@ static void etp_atfork_child (void)
 {
   ETP_REQ *prv;
 
-  while (prv = reqq_shift (&req_queue))
+  while ((prv = reqq_shift (&req_queue)))
     ETP_DESTROY (prv);
 
-  while (prv = reqq_shift (&res_queue))
+  while ((prv = reqq_shift (&res_queue)))
     ETP_DESTROY (prv);
 
   while (wrk_first.next != &wrk_first)
