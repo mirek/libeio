@@ -238,7 +238,7 @@ C<eio_poll>).
 Libeio can be embedded directly into programs. This functionality is not
 documented and not (yet) officially supported.
 
-If you ened to know how, cehck the C<IO::AIO> perl module, which does
+If you need to know how, check the C<IO::AIO> perl module, which does
 exactly that.
 
 

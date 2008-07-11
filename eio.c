@@ -179,6 +179,15 @@ static mutex_t reslock = X_MUTEX_INIT;
 static mutex_t reqlock = X_MUTEX_INIT;
 static cond_t  reqwait = X_COND_INIT;
 
+#if !HAVE_PREADWRITE
+/*
+ * make our pread/pwrite emulation safe against themselves, but not against
+ * normal read/write by using a mutex. slows down execution a lot,
+ * but that's your problem, not mine.
+ */
+static mutex_t preadwritelock = X_MUTEX_INIT;
+#endif
+
 typedef struct etp_worker
 {
   /* locked by wrklock */
@@ -701,13 +710,6 @@ int eio_poll (void)
 #if !HAVE_PREADWRITE
 # define pread  eio__pread
 # define pwrite eio__pwrite
-
-/*
- * make our pread/pwrite safe against themselves, but not against
- * normal read/write by using a mutex. slows down execution a lot,
- * but that's your problem, not mine.
- */
-static mutex_t preadwritelock = X_MUTEX_INIT;
 
 static ssize_t
 eio__pread (int fd, void *buf, size_t count, off_t offset)
