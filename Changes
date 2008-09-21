@@ -1,5 +1,9 @@
 Revision history for libeio
 
+TODO: maybe add mincore support? available on at leats darwin, solaris, linux, freebsd
+
 1.0
+	- added msync, mtouch support (untested).
+        - fixed custom support.
 	- "outbundled" from IO::AIO.
 
