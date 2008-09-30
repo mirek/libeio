@@ -1228,6 +1228,7 @@ static void eio_execute (etp_worker *self, eio_req *req)
                         ? futimes (req->int1, times)
                         : utimes  (req->ptr1, times);
         }
+        break;
 
       case EIO_GROUP:
         abort (); /* handled in eio_request */
