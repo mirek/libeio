@@ -122,6 +122,17 @@
 
 /*****************************************************************************/
 
+#if __GNUC__ >= 3
+# define expect(expr,value) __builtin_expect ((expr),(value))
+#else
+# define expect(expr,value) (expr)
+#endif
+
+#define expect_false(expr) expect ((expr) != 0, 0)
+#define expect_true(expr)  expect ((expr) != 0, 1)
+
+/*****************************************************************************/
+
 #define ETP_PRI_MIN EIO_PRI_MIN
 #define ETP_PRI_MAX EIO_PRI_MAX
 
@@ -413,11 +424,11 @@ static void etp_start_thread (void)
 
 static void etp_maybe_start_thread (void)
 {
-  if (etp_nthreads () >= wanted)
+  if (expect_true (etp_nthreads () >= wanted))
     return;
   
   /* todo: maybe use idle here, but might be less exact */
-  if (0 <= (int)etp_nthreads () + (int)etp_npending () - (int)etp_nreqs ())
+  if (expect_true (0 <= (int)etp_nthreads () + (int)etp_npending () - (int)etp_nreqs ()))
     return;
 
   etp_start_thread ();
@@ -480,7 +491,7 @@ static int etp_poll (void)
       --nreqs;
       X_UNLOCK (reqlock);
 
-      if (req->type == EIO_GROUP && req->size)
+      if (expect_false (req->type == EIO_GROUP && req->size))
         {
           req->int1 = 1; /* mark request as delayed */
           continue;
@@ -488,11 +499,11 @@ static int etp_poll (void)
       else
         {
           int res = ETP_FINISH (req);
-          if (res)
+          if (expect_false (res))
             return res;
         }
 
-      if (maxreqs && !--maxreqs)
+      if (expect_false (maxreqs && !--maxreqs))
         break;
 
       if (maxtime)
@@ -521,17 +532,36 @@ static void etp_submit (ETP_REQ *req)
 {
   req->pri -= ETP_PRI_MIN;
 
-  if (req->pri < ETP_PRI_MIN - ETP_PRI_MIN) req->pri = ETP_PRI_MIN - ETP_PRI_MIN;
-  if (req->pri > ETP_PRI_MAX - ETP_PRI_MIN) req->pri = ETP_PRI_MAX - ETP_PRI_MIN;
+  if (expect_false (req->pri < ETP_PRI_MIN - ETP_PRI_MIN)) req->pri = ETP_PRI_MIN - ETP_PRI_MIN;
+  if (expect_false (req->pri > ETP_PRI_MAX - ETP_PRI_MIN)) req->pri = ETP_PRI_MAX - ETP_PRI_MIN;
 
-  X_LOCK (reqlock);
-  ++nreqs;
-  ++nready;
-  reqq_push (&req_queue, req);
-  X_COND_SIGNAL (reqwait);
-  X_UNLOCK (reqlock);
+  if (expect_false (req->type == EIO_GROUP))
+    {
+      /* I hope this is worth it :/ */
+      X_LOCK (reqlock);
+      ++nreqs;
+      X_UNLOCK (reqlock);
 
-  etp_maybe_start_thread ();
+      X_LOCK (reslock);
+
+      ++npending;
+
+      if (!reqq_push (&res_queue, req) && want_poll_cb)
+        want_poll_cb ();
+
+      X_UNLOCK (reslock);
+    }
+  else
+    {
+      X_LOCK (reqlock);
+      ++nreqs;
+      ++nready;
+      reqq_push (&req_queue, req);
+      X_COND_SIGNAL (reqwait);
+      X_UNLOCK (reqlock);
+
+      etp_maybe_start_thread ();
+    }
 }
 
 static void etp_set_max_poll_time (double nseconds)
@@ -1200,6 +1230,8 @@ static void eio_execute (etp_worker *self, eio_req *req)
         }
 
       case EIO_GROUP:
+        abort (); /* handled in eio_request */
+
       case EIO_NOP:
         req->result = 0;
         break;
