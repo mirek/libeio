@@ -112,10 +112,12 @@ struct eio_req
   eio_req *grp, *grp_prev, *grp_next, *grp_first; /* private */
 };
 
+/* _private_ flags */
 enum {
   EIO_FLAG_CANCELLED = 0x01, /* request was cancelled */
   EIO_FLAG_PTR1_FREE = 0x02, /* need to free(ptr1) */
-  EIO_FLAG_PTR2_FREE = 0x04  /* need to free(ptr2) */
+  EIO_FLAG_PTR2_FREE = 0x04, /* need to free(ptr2) */
+  EIO_FLAG_GROUPADD  = 0x08  /* some request was added to the group */
 };
 
 enum {

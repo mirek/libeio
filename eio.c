@@ -606,12 +606,12 @@ static void grp_try_feed (eio_req *grp)
 {
   while (grp->size < grp->int2 && !EIO_CANCELLED (grp))
     {
-      int old_len = grp->size;
+      grp->flags &= ~EIO_FLAG_GROUPADD;
 
       EIO_FEED (grp);
 
       /* stop if no progress has been made */
-      if (old_len == grp->size)
+      if (!(grp->flags & EIO_FLAG_GROUPADD))
         {
           grp->feed = 0;
           break;
@@ -1482,6 +1482,8 @@ void eio_grp_limit (eio_req *grp, int limit)
 void eio_grp_add (eio_req *grp, eio_req *req)
 {
   assert (("cannot add requests to IO::AIO::GRP after the group finished", grp->int1 != 2));
+
+  grp->flags |= EIO_FLAG_GROUPADD;
 
   ++grp->size;
   req->grp = grp;
