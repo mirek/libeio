@@ -90,3 +90,18 @@ int main(void)
 ],ac_cv_sendfile=yes,ac_cv_sendfile=no)])
 test $ac_cv_sendfile = yes && AC_DEFINE(HAVE_SENDFILE, 1, sendfile(2) is available and supported)
 
+AC_CACHE_CHECK(for sync_file_range, ac_cv_sync_file_range, [AC_LINK_IFELSE([
+#include <fcntl.h>
+int main(void)
+{
+   int fd = 0;
+   off64_t offset = 1;
+   off64_t nbytes = 1;
+   unsigned int flags = SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER;
+   ssize_t res;
+   res = sync_file_range (fd, offset, nbytes, flags);
+   return 0;
+}
+],ac_cv_sync_file_range=yes,ac_cv_sync_file_range=no)])
+test $ac_cv_sync_file_range = yes && AC_DEFINE(HAVE_SYNC_FILE_RANGE, 1, sync_file_range(2) is available)
+

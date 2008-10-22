@@ -238,6 +238,9 @@ C<eio_poll>).
 Libeio can be embedded directly into programs. This functionality is not
 documented and not (yet) officially supported.
 
+Note that, when including C<libeio.m4>, you are responsible for defining
+the compilation environment (C<_LARGEFILE_SOURCE>, C<_GNU_SOURCE> etc.).
+
 If you need to know how, check the C<IO::AIO> perl module, which does
 exactly that.
 

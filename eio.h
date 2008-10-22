@@ -69,12 +69,21 @@ enum {
   EIO_UTIME, EIO_FUTIME,
   EIO_CHMOD, EIO_FCHMOD,
   EIO_CHOWN, EIO_FCHOWN,
-  EIO_SYNC, EIO_FSYNC, EIO_FDATASYNC, EIO_MSYNC, EIO_MTOUCH,
+  EIO_SYNC, EIO_FSYNC, EIO_FDATASYNC,
+  EIO_MSYNC, EIO_MTOUCH, EIO_SYNC_FILE_RANGE,
   EIO_UNLINK, EIO_RMDIR, EIO_MKDIR, EIO_RENAME,
   EIO_MKNOD, EIO_READDIR,
   EIO_LINK, EIO_SYMLINK, EIO_READLINK,
   EIO_GROUP, EIO_NOP,
-  EIO_BUSY,
+  EIO_BUSY
+};
+
+/* eio_sync_file_range flags */
+
+enum {
+  EIO_SYNC_FILE_RANGE_WAIT_BEFORE = 1,
+  EIO_SYNC_FILE_RANGE_WRITE       = 2,
+  EIO_SYNC_FILE_RANGE_WAIT_AFTER  = 4
 };
 
 typedef double eio_tstamp; /* feel free to use double in your code directly */
@@ -86,8 +95,8 @@ struct eio_req
   eio_req volatile *next; /* private ETP */
 
   ssize_t result;  /* result of syscall, e.g. result = read (... */
-  off_t offs;      /* read, write, truncate, readahead: file offset */
-  size_t size;     /* read, write, readahead, sendfile, msync: length */
+  off_t offs;      /* read, write, truncate, readahead, sync_file_range: file offset */
+  size_t size;     /* read, write, readahead, sendfile, msync, sync_file_range: length */
   void *ptr1;      /* all applicable requests: pathname, old name */
   void *ptr2;      /* all applicable requests: new name or memory buffer */
   eio_tstamp nv1;  /* utime, futime: atime; busy: sleep time */
@@ -95,7 +104,7 @@ struct eio_req
 
   int type;        /* EIO_xxx constant ETP */
   int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open, msync: flags */
-  long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode */
+  long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode, sync_file_range: flags */
   long int3;       /* chown, fchown: gid; mknod: dev_t */
   int errorno;     /* errno value on syscall return */
 
@@ -165,6 +174,7 @@ eio_req *eio_fsync     (int fd, int pri, eio_cb cb, void *data);
 eio_req *eio_fdatasync (int fd, int pri, eio_cb cb, void *data);
 eio_req *eio_msync     (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data);
 eio_req *eio_mtouch    (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data);
+eio_req *eio_sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags, int pri, eio_cb cb, void *data);
 eio_req *eio_close     (int fd, int pri, eio_cb cb, void *data);
 eio_req *eio_readahead (int fd, off_t offset, size_t length, int pri, eio_cb cb, void *data);
 eio_req *eio_read      (int fd, void *buf, size_t length, off_t offset, int pri, eio_cb cb, void *data);

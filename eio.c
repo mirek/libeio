@@ -738,6 +738,8 @@ int eio_poll (void)
 /* work around various missing functions */
 
 #if !HAVE_PREADWRITE
+# undef pread
+# undef pwrite
 # define pread  eio__pread
 # define pwrite eio__pwrite
 
@@ -776,6 +778,8 @@ eio__pwrite (int fd, void *buf, size_t count, off_t offset)
 
 #ifndef HAVE_FUTIMES
 
+# undef utimes
+# undef futimes
 # define utimes(path,times)  eio__utimes  (path, times)
 # define futimes(fd,times)   eio__futimes (fd, times)
 
@@ -804,10 +808,40 @@ static int eio__futimes (int fd, const struct timeval tv[2])
 #endif
 
 #if !HAVE_FDATASYNC
-# define fdatasync fsync
+# undef fdatasync
+# define fdatasync(fd) fsync (fd)
 #endif
 
+/* sync_file_range always needs emulation */
+int
+eio__sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags)
+{
+#if HAVE_SYNC_FILE_RANGE
+  int res;
+
+  if (EIO_SYNC_FILE_RANGE_WAIT_BEFORE   != SYNC_FILE_RANGE_WAIT_BEFORE
+      || EIO_SYNC_FILE_RANGE_WRITE      != SYNC_FILE_RANGE_WRITE
+      || EIO_SYNC_FILE_RANGE_WAIT_AFTER != SYNC_FILE_RANGE_WAIT_AFTER)
+    {
+      flags = 0
+         | (flags & EIO_SYNC_FILE_RANGE_WAIT_BEFORE ? SYNC_FILE_RANGE_WAIT_BEFORE : 0)
+         | (flags & EIO_SYNC_FILE_RANGE_WRITE       ? SYNC_FILE_RANGE_WRITE       : 0)
+         | (flags & EIO_SYNC_FILE_RANGE_WAIT_AFTER  ? SYNC_FILE_RANGE_WAIT_AFTER  : 0);
+    }
+
+  res = sync_file_range (fd, offset, nbytes, flags);
+
+  if (res != ENOSYS)
+    return res;
+#endif
+
+  /* even though we could play tricks with the flags, it's better to always
+   * call fdatasync, as thta matches the expectation of it's users best */
+  return fdatasync (fd);
+}
+
 #if !HAVE_READAHEAD
+# undef readahead
 # define readahead(fd,offset,count) eio__readahead (fd, offset, count, self)
 
 static ssize_t
@@ -983,6 +1017,7 @@ eio__scandir (eio_req *req, etp_worker *self)
 }
 
 #if !(_POSIX_MAPPED_FILES && _POSIX_SYNCHRONIZED_IO)
+# undef msync
 # define msync(a,b,c) ENOSYS
 #endif
 
@@ -1187,6 +1222,7 @@ static void eio_execute (etp_worker *self, eio_req *req)
       case EIO_FDATASYNC: req->result = fdatasync (req->int1); break;
       case EIO_MSYNC:     req->result = msync (req->ptr2, req->size, req->int1); break;
       case EIO_MTOUCH:    req->result = eio__mtouch (req->ptr2, req->size, req->int1); break;
+      case EIO_SYNC_FILE_RANGE: req->result = eio__sync_file_range (req->int1, req->offs, req->size, req->int2); break;
 
       case EIO_READDIR:   eio__scandir (req, self); break;
 
@@ -1279,6 +1315,11 @@ eio_req *eio_msync (void *addr, size_t length, int flags, int pri, eio_cb cb, vo
 eio_req *eio_mtouch (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data)
 {
   REQ (EIO_MTOUCH); req->ptr2 = addr; req->size = length; req->int1 = flags; SEND;
+}
+
+eio_req *eio_sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_SYNC_FILE_RANGE); req->int1 = fd; req->offs = offset; req->size = nbytes; req->int2 = flags; SEND;
 }
 
 eio_req *eio_fdatasync (int fd, int pri, eio_cb cb, void *data)
