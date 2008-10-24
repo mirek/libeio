@@ -831,7 +831,7 @@ eio__sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags)
 
   res = sync_file_range (fd, offset, nbytes, flags);
 
-  if (res != ENOSYS)
+  if (!res || errno != ENOSYS)
     return res;
 #endif
 
@@ -1018,7 +1018,7 @@ eio__scandir (eio_req *req, etp_worker *self)
 
 #if !(_POSIX_MAPPED_FILES && _POSIX_SYNCHRONIZED_IO)
 # undef msync
-# define msync(a,b,c) ENOSYS
+# define msync(a,b,c) ((errno = ENOSYS), -1)
 #endif
 
 int
