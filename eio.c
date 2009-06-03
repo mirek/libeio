@@ -773,7 +773,7 @@ eio__pwrite (int fd, void *buf, size_t count, off_t offset)
   ooffset = lseek (fd, 0, SEEK_CUR);
   lseek (fd, offset, SEEK_SET);
   res = write (fd, buf, count);
-  lseek (fd, offset, SEEK_SET);
+  lseek (fd, ooffset, SEEK_SET);
   X_UNLOCK (preadwritelock);
 
   return res;
