@@ -1063,6 +1063,8 @@ eio__scandir (eio_req *req, etp_worker *self)
                 eio_dirent *ent = dents + dentoffs;
                 eio_dirent *dir = dents;
 
+                /* now move dirs to the front, and non-dirs to the back */
+                /* by walkign from both sides and swapping if necessary */
                 while (ent > dir)
                   {
                     if (dir->type == DT_DIR)
