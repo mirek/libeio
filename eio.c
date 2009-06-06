@@ -180,6 +180,7 @@ static void eio_execute (struct etp_worker *self, eio_req *req);
       closedir (wrk->dirp);	\
       wrk->dirp = 0;		\
     }
+
 #define ETP_WORKER_COMMON \
   void *dbuf;	\
   DIR *dirp;
@@ -1012,13 +1013,11 @@ eio__scandir (eio_req *req, etp_worker *self)
     flags &= ~(EIO_READDIR_DIRS_FIRST | EIO_READDIR_STAT_ORDER);
 
   X_LOCK (wrklock);
-
   /* the corresponding closedir is in ETP_WORKER_CLEAR */
   self->dirp = dirp = opendir (req->ptr1);
   req->flags |= EIO_FLAG_PTR1_FREE | EIO_FLAG_PTR2_FREE;
   req->ptr1 = names = malloc (namesalloc);
   req->ptr2 = dents = flags ? malloc (dentalloc * sizeof (eio_dirent)) : 0;
-
   X_UNLOCK (wrklock);
 
   if (dirp && names && (!flags || dents))
@@ -1036,12 +1035,21 @@ eio__scandir (eio_req *req, etp_worker *self)
             req->int1   = flags;
             req->result = dentoffs;
 
-            if (flags & EIO_READDIR_STAT_ORDER || !(~flags & (EIO_READDIR_DIRS_FIRST | EIO_READDIR_FOUND_UNKNOWN))
+            if (dents)
+              {
+                eio_dirent *ent = dents + dentoffs;
+
+                while (ent > dents)
+                  (--ent)->name = names + (size_t)ent->name;
+              }
+
+            if (flags & EIO_READDIR_STAT_ORDER
+                || !(~flags & (EIO_READDIR_DIRS_FIRST | EIO_READDIR_FOUND_UNKNOWN)))
               {
                 /* pray your qsort doesn't use quicksort */
                 qsort (dents, dentoffs, sizeof (*dents), eio_dent_cmp); /* score depends of DIRS_FIRST */
               }
-            else if (flags & EIO_READDIR_DIRS_FIRST && !(flags & EIO_READDIR_FOUND_UNKNOWN))
+            else if (flags & EIO_READDIR_DIRS_FIRST)
               {
                 /* in this case, all is known, and we just put dirs first and sort them */
                 eio_dirent *ent = dents + dentoffs;
@@ -1070,13 +1078,23 @@ eio__scandir (eio_req *req, etp_worker *self)
                 qsort (dents, dir - dents, sizeof (*dents), eio_dent_cmp);
               }
 
-              {int i; for(i=0;i<dentoffs;++i){eio_dirent *e=dents+i; printf ("%9ld %3d %s\n", e->inode,e->score,e->name);}}//D
+            /* only provide the names array unless DENTS is specified */
+            if (!(flags & EIO_READDIR_DENTS))
+              {
+                X_LOCK (wrklock);
+                assert (!dents);
+                req->ptr1 = 0;
+                req->ptr2 = names;
+                X_UNLOCK (wrklock);
+              }
 
             break;
           }
 
+        /* now add the entry to our list(s) */
         name = entp->d_name;
 
+        /* skip . and .. entries */
         if (name [0] != '.' || (name [1] && (name [1] != '.' || name [2])))
           {
             int len = strlen (name) + 1;
@@ -1111,7 +1129,7 @@ eio__scandir (eio_req *req, etp_worker *self)
 
                 ent = dents + dentoffs;
 
-                ent->name    = names + namesoffs;
+                ent->name    = (char *)(size_t)namesoffs; /* rather dirtily we store the offset in the pointer */
                 ent->namelen = len - 1;
                 ent->inode   = D_INO (entp);
 
@@ -1128,16 +1146,16 @@ eio__scandir (eio_req *req, etp_worker *self)
                     #ifdef DT_CHR
                       case DT_CHR:  ent->type = EIO_DT_CHR;  break;
                     #endif          
-                    #ifdef DT_DIR   
+                    #ifdef DT_DIR
                       case DT_DIR:  ent->type = EIO_DT_DIR;  break;
                     #endif          
-                    #ifdef DT_BLK   
+                    #ifdef DT_BLK
                       case DT_BLK:  ent->type = EIO_DT_BLK;  break;
                     #endif          
-                    #ifdef DT_REG   
+                    #ifdef DT_REG
                       case DT_REG:  ent->type = EIO_DT_REG;  break;
                     #endif          
-                    #ifdef DT_LNK   
+                    #ifdef DT_LNK
                       case DT_LNK:  ent->type = EIO_DT_LNK;  break;
                     #endif
                     #ifdef DT_SOCK
@@ -1170,16 +1188,6 @@ eio__scandir (eio_req *req, etp_worker *self)
       }
   else
     req->result = -1;
-
-  /* if user doesn't want the dents, do not provide it */
-  if (!(flags & EIO_READDIR_DENTS))
-    {
-      X_LOCK (wrklock);
-      free (dents);
-      req->ptr2 = req->ptr1;
-      req->ptr1 = 0;
-      X_UNLOCK (wrklock);
-    }
 }
 
 #if !(_POSIX_MAPPED_FILES && _POSIX_SYNCHRONIZED_IO)

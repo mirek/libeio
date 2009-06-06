@@ -137,7 +137,7 @@ struct eio_req
   ssize_t result;  /* result of syscall, e.g. result = read (... */
   off_t offs;      /* read, write, truncate, readahead, sync_file_range: file offset */
   size_t size;     /* read, write, readahead, sendfile, msync, sync_file_range: length */
-  void *ptr1;      /* all applicable requests: pathname, old name */
+  void *ptr1;      /* all applicable requests: pathname, old name; readdir: possible output memory buffer */
   void *ptr2;      /* all applicable requests: new name or memory buffer */
   eio_tstamp nv1;  /* utime, futime: atime; busy: sleep time */
   eio_tstamp nv2;  /* utime, futime: mtime */
