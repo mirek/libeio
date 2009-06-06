@@ -1201,7 +1201,7 @@ eio__scandir (eio_req *req, etp_worker *self)
                         if (*name == '.') /* leading dots are likely directories, and, in any case, rare */
                           ent->score = 98;
                         else if (!strchr (name, '.')) /* absense of dots indicate likely dirs */
-                          ent->score = len <= 2 ? len + 60 : len <= 4 ? 50 : len <= 7 ? 40 : 10; /* shorter == more likely dir, but avoid too many classes */
+                          ent->score = len <= 2 ? len + 6 : len <= 4 ? 5 : len <= 7 ? 4 : 1; /* shorter == more likely dir, but avoid too many classes */
                       }
                     else if (ent->type == EIO_DT_DIR)
                       ent->score = 100;
