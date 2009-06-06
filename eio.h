@@ -78,11 +78,18 @@ enum eio_dtype {
   EIO_DT_UNKNOWN =  0,
   EIO_DT_FIFO    =  1,
   EIO_DT_CHR     =  2,
+  EIO_DT_MPC     =  3, /* multiplexed char device (v7+Coherent) */
   EIO_DT_DIR     =  4,
+  EIO_DT_NAM     =  5, /* xenix special named file */
   EIO_DT_BLK     =  6,
+  EIO_DT_MPB     =  7, /* multiplexed block device (v7+coherent) */
   EIO_DT_REG     =  8,
+  EIO_DT_NWK     =  9, /* HP-UX network special */
+  EIO_DT_CMP     =  9, /* VxFS compressed */
   EIO_DT_LNK     = 10,
+  /*  DT_SHAD    = 11,*/
   EIO_DT_SOCK    = 12,
+  EIO_DT_DOOR    = 13, /* solaris door */
   EIO_DT_WHT     = 14,
   EIO_DT_MAX     = 15 /* highest DT_VALUE ever, hopefully */
 };

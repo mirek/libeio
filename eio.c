@@ -82,11 +82,17 @@
 
 /* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
 # if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-#  define D_INO(de) (de)->d_fileno
 #  define _DIRENT_HAVE_D_TYPE /* sigh */
+#  define D_INO(de) (de)->d_fileno
+#  define D_NAMLEN(de) (de)->d_namlen
 # elif defined(__linux) || defined(d_ino) || _XOPEN_SOURCE >= 600
 #  define D_INO(de) (de)->d_ino
 # endif
+
+#ifdef _D_EXACT_NAMLEN
+# undef D_NAMLEN
+# define D_NAMLEN(de) _D_EXACT_NAMLEN (de)
+#endif
 
 # ifdef _DIRENT_HAVE_D_TYPE
 #  define D_TYPE(de) (de)->d_type
@@ -116,9 +122,11 @@
 #ifndef D_TYPE
 # define D_TYPE(de) 0
 #endif
-
 #ifndef D_INO
 # define D_INO(de) 0
+#endif
+#ifndef D_NAMLEN
+# define D_NAMLEN(de) strlen ((de)->d_name)
 #endif
 
 /* number of seconds after which an idle threads exit */
@@ -1097,7 +1105,7 @@ eio__scandir (eio_req *req, etp_worker *self)
         /* skip . and .. entries */
         if (name [0] != '.' || (name [1] && (name [1] != '.' || name [2])))
           {
-            int len = strlen (name) + 1;
+            int len = D_NAMLEN (entp) + 1;
 
             while (expect_false (namesoffs + len > namesalloc))
               {
@@ -1146,20 +1154,38 @@ eio__scandir (eio_req *req, etp_worker *self)
                     #ifdef DT_CHR
                       case DT_CHR:  ent->type = EIO_DT_CHR;  break;
                     #endif          
+                    #ifdef DT_MPC
+                      case DT_MPC:  ent->type = EIO_DT_MPC;  break;
+                    #endif          
                     #ifdef DT_DIR
                       case DT_DIR:  ent->type = EIO_DT_DIR;  break;
+                    #endif          
+                    #ifdef DT_NAM
+                      case DT_NAM:  ent->type = EIO_DT_NAM;  break;
                     #endif          
                     #ifdef DT_BLK
                       case DT_BLK:  ent->type = EIO_DT_BLK;  break;
                     #endif          
+                    #ifdef DT_MPB
+                      case DT_MPB:  ent->type = EIO_DT_MPB;  break;
+                    #endif          
                     #ifdef DT_REG
                       case DT_REG:  ent->type = EIO_DT_REG;  break;
+                    #endif          
+                    #ifdef DT_NWK
+                      case DT_NWK:  ent->type = EIO_DT_NWK;  break;
+                    #endif          
+                    #ifdef DT_CMP
+                      case DT_CMP:  ent->type = EIO_DT_CMP;  break;
                     #endif          
                     #ifdef DT_LNK
                       case DT_LNK:  ent->type = EIO_DT_LNK;  break;
                     #endif
                     #ifdef DT_SOCK
                       case DT_SOCK: ent->type = EIO_DT_SOCK; break;
+                    #endif
+                    #ifdef DT_DOOR
+                      case DT_DOOR: ent->type = EIO_DT_DOOR; break;
                     #endif
                     #ifdef DT_WHT
                       case DT_WHT:  ent->type = EIO_DT_WHT;  break;
@@ -1175,9 +1201,9 @@ eio__scandir (eio_req *req, etp_worker *self)
                         if (*name == '.') /* leading dots are likely directories, and, in any case, rare */
                           ent->score = 98;
                         else if (!strchr (name, '.')) /* absense of dots indicate likely dirs */
-                          ent->score = len <= 4 ? 5 : len <= 7 ? 4 : 1; /* shorter == more likely dir, but avoid too many classes */
+                          ent->score = len <= 2 ? len + 60 : len <= 4 ? 50 : len <= 7 ? 40 : 10; /* shorter == more likely dir, but avoid too many classes */
                       }
-                    else if (ent->type == DT_DIR)
+                    else if (ent->type == EIO_DT_DIR)
                       ent->score = 100;
                   }
               }
