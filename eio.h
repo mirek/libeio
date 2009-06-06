@@ -1,7 +1,7 @@
 /*
  * libeio API header
  *
- * Copyright (c) 2007,2008 Marc Alexander Lehmann <libeio@schmorp.de>
+ * Copyright (c) 2007,2008,2009 Marc Alexander Lehmann <libeio@schmorp.de>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modifica-
@@ -47,7 +47,8 @@ extern "C" {
 #include <stddef.h>
 #include <sys/types.h>
 
-typedef struct eio_req eio_req;
+typedef struct eio_req    eio_req;
+typedef struct eio_dirent eio_dirent;
 
 typedef int (*eio_cb)(eio_req *req);
 
@@ -58,6 +59,54 @@ typedef int (*eio_cb)(eio_req *req);
 #ifndef EIO_STRUCT_STAT
 # define EIO_STRUCT_STAT struct stat
 #endif
+
+/* for readdir */
+
+/* eio_readdir flags */
+enum {
+  EIO_READDIR_DENTS         = 0x01, /* ptr2 contains eio_dirents, not just the (unsorted) names */
+  EIO_READDIR_DIRS_FIRST    = 0x02, /* dirents gets sorted into a good stat() ing order to find directories first */
+  EIO_READDIR_STAT_ORDER    = 0x04, /* dirents gets sorted into a good stat() ing order to quickly stat all files */
+  EIO_READDIR_FOUND_UNKNOWN = 0x80, /* set by eio_readdir when *_ARRAY was set and any TYPE=UNKNOWN's were found */
+
+  EIO_READDIR_CUSTOM1       = 0x100, /* for use by apps */
+  EIO_READDIR_CUSTOM2       = 0x200  /* for use by apps */
+};
+
+/* using "typical" values in the hope that the compiler will do something sensible */
+enum eio_dtype {
+  EIO_DT_UNKNOWN =  0,
+  EIO_DT_FIFO    =  1,
+  EIO_DT_CHR     =  2,
+  EIO_DT_DIR     =  4,
+  EIO_DT_BLK     =  6,
+  EIO_DT_REG     =  8,
+  EIO_DT_LNK     = 10,
+  EIO_DT_SOCK    = 12,
+  EIO_DT_WHT     = 14,
+  EIO_DT_MAX     = 15 /* highest DT_VALUE ever, hopefully */
+};
+
+struct eio_dirent {
+  char *name;
+  ino_t inode;
+  unsigned short namelen;
+  unsigned char type;
+  unsigned char score; /* internal use */
+  /* 0-4 bytes padding */
+};
+
+/* eio_sync_file_range flags */
+
+enum {
+  EIO_SYNC_FILE_RANGE_WAIT_BEFORE = 1,
+  EIO_SYNC_FILE_RANGE_WRITE       = 2,
+  EIO_SYNC_FILE_RANGE_WAIT_AFTER  = 4
+};
+
+typedef double eio_tstamp; /* feel free to use double in your code directly */
+
+/* the eio request structure */
 
 enum {
   EIO_CUSTOM,
@@ -78,18 +127,9 @@ enum {
   EIO_BUSY
 };
 
-/* eio_sync_file_range flags */
-
-enum {
-  EIO_SYNC_FILE_RANGE_WAIT_BEFORE = 1,
-  EIO_SYNC_FILE_RANGE_WRITE       = 2,
-  EIO_SYNC_FILE_RANGE_WAIT_AFTER  = 4
-};
-
-typedef double eio_tstamp; /* feel free to use double in your code directly */
-
 /* eio request structure */
 /* this structure is mostly read-only */
+/* when initialising it, all members must be zero-initialised */
 struct eio_req
 {
   eio_req volatile *next; /* private ETP */
@@ -103,7 +143,7 @@ struct eio_req
   eio_tstamp nv2;  /* utime, futime: mtime */
 
   int type;        /* EIO_xxx constant ETP */
-  int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open, msync: flags */
+  int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open, msync, readdir: flags */
   long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode, sync_file_range: flags */
   long int3;       /* chown, fchown: gid; mknod: dev_t */
   int errorno;     /* errno value on syscall return */
@@ -192,7 +232,7 @@ eio_req *eio_truncate  (const char *path, off_t offset, int pri, eio_cb cb, void
 eio_req *eio_chown     (const char *path, uid_t uid, gid_t gid, int pri, eio_cb cb, void *data);
 eio_req *eio_chmod     (const char *path, mode_t mode, int pri, eio_cb cb, void *data);
 eio_req *eio_mkdir     (const char *path, mode_t mode, int pri, eio_cb cb, void *data);
-eio_req *eio_readdir   (const char *path, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */
+eio_req *eio_readdir   (const char *path, int flags, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */
 eio_req *eio_rmdir     (const char *path, int pri, eio_cb cb, void *data);
 eio_req *eio_unlink    (const char *path, int pri, eio_cb cb, void *data);
 eio_req *eio_readlink  (const char *path, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */

@@ -1,7 +1,7 @@
 /*
  * libeio implementation
  *
- * Copyright (c) 2007,2008 Marc Alexander Lehmann <libeio@schmorp.de>
+ * Copyright (c) 2007,2008,2009 Marc Alexander Lehmann <libeio@schmorp.de>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modifica-
@@ -70,7 +70,6 @@
 #ifdef _WIN32
 
   /*doh*/
-
 #else
 
 # include "config.h"
@@ -80,6 +79,18 @@
 # include <utime.h>
 # include <signal.h>
 # include <dirent.h>
+
+/* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
+# if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+#  define D_INO(de) (de)->d_fileno
+#  define _DIRENT_HAVE_D_TYPE /* sigh */
+# elif defined(__linux) || defined(d_ino) || _XOPEN_SOURCE >= 600
+#  define D_INO(de) (de)->d_ino
+# endif
+
+# ifdef _DIRENT_HAVE_D_TYPE
+#  define D_TYPE(de) (de)->d_type
+# endif
 
 # ifndef EIO_STRUCT_DIRENT
 #  define EIO_STRUCT_DIRENT struct dirent
@@ -100,6 +111,14 @@
 # else
 #  error sendfile support requested but not available
 # endif
+#endif
+
+#ifndef D_TYPE
+# define D_TYPE(de) 0
+#endif
+
+#ifndef D_INO
+# define D_INO(de) 0
 #endif
 
 /* number of seconds after which an idle threads exit */
@@ -963,32 +982,98 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
   return res;
 }
 
+static int
+eio_dent_cmp (const void *a_, const void *b_)
+{
+  const eio_dirent *a = (const eio_dirent *)a_;
+  const eio_dirent *b = (const eio_dirent *)b_;
+
+  return (int)b->score - (int)a->score ? (int)b->score - (int)a->score
+         : a->inode < b->inode ? -1 : a->inode > b->inode ? 1 : 0; /* int might be < ino_t */
+}
+
 /* read a full directory */
 static void
 eio__scandir (eio_req *req, etp_worker *self)
 {
   DIR *dirp;
   EIO_STRUCT_DIRENT *entp;
-  char *name, *names;
-  int memlen = 4096;
-  int memofs = 0;
-  int res = 0;
+  unsigned char *name, *names;
+  int namesalloc = 4096;
+  int namesoffs = 0;
+  int flags = req->int1;
+  eio_dirent *dents = 0;
+  int dentalloc = 128;
+  int dentoffs = 0;
+
+  req->result = -1;
+
+  if (!(flags & EIO_READDIR_DENTS))
+    flags &= ~(EIO_READDIR_DIRS_FIRST | EIO_READDIR_STAT_ORDER);
 
   X_LOCK (wrklock);
+
   /* the corresponding closedir is in ETP_WORKER_CLEAR */
   self->dirp = dirp = opendir (req->ptr1);
-  req->flags |= EIO_FLAG_PTR2_FREE;
-  req->ptr2 = names = malloc (memlen);
+  req->flags |= EIO_FLAG_PTR1_FREE | EIO_FLAG_PTR2_FREE;
+  req->ptr1 = names = malloc (namesalloc);
+  req->ptr2 = dents = flags ? malloc (dentalloc * sizeof (eio_dirent)) : 0;
+
   X_UNLOCK (wrklock);
 
-  if (dirp && names)
+  if (dirp && names && (!flags || dents))
     for (;;)
       {
         errno = 0;
         entp = readdir (dirp);
 
         if (!entp)
-          break;
+          {
+            if (errno)
+              break;
+
+            /* sort etc. */
+            req->int1   = flags;
+            req->result = dentoffs;
+
+            if (flags & EIO_READDIR_STAT_ORDER || !(~flags & (EIO_READDIR_DIRS_FIRST | EIO_READDIR_FOUND_UNKNOWN))
+              {
+                /* pray your qsort doesn't use quicksort */
+                qsort (dents, dentoffs, sizeof (*dents), eio_dent_cmp); /* score depends of DIRS_FIRST */
+              }
+            else if (flags & EIO_READDIR_DIRS_FIRST && !(flags & EIO_READDIR_FOUND_UNKNOWN))
+              {
+                /* in this case, all is known, and we just put dirs first and sort them */
+                eio_dirent *ent = dents + dentoffs;
+                eio_dirent *dir = dents;
+
+                while (ent > dir)
+                  {
+                    if (dir->type == DT_DIR)
+                      ++dir;
+                    else 
+                      {
+                        --ent;
+
+                        if (ent->type == DT_DIR)
+                          {
+                            eio_dirent tmp = *dir;
+                            *dir = *ent;
+                            *ent = tmp;
+
+                            ++dir;
+                          }
+                      }
+                  }
+
+                /* now sort the dirs only */
+                qsort (dents, dir - dents, sizeof (*dents), eio_dent_cmp);
+              }
+
+              {int i; for(i=0;i<dentoffs;++i){eio_dirent *e=dents+i; printf ("%9ld %3d %s\n", e->inode,e->score,e->name);}}//D
+
+            break;
+          }
 
         name = entp->d_name;
 
@@ -996,28 +1081,105 @@ eio__scandir (eio_req *req, etp_worker *self)
           {
             int len = strlen (name) + 1;
 
-            res++;
-
-            while (memofs + len > memlen)
+            while (expect_false (namesoffs + len > namesalloc))
               {
-                memlen *= 2;
+                namesalloc *= 2;
                 X_LOCK (wrklock);
-                req->ptr2 = names = realloc (names, memlen);
+                req->ptr1 = names = realloc (names, namesalloc);
                 X_UNLOCK (wrklock);
 
                 if (!names)
                   break;
               }
 
-            memcpy (names + memofs, name, len);
-            memofs += len;
+            memcpy (names + namesoffs, name, len);
+
+            if (dents)
+              {
+                struct eio_dirent *ent;
+
+                if (expect_false (dentoffs == dentalloc))
+                  {
+                    dentalloc *= 2;
+                    X_LOCK (wrklock);
+                    req->ptr2 = dents = realloc (dents, dentalloc * sizeof (eio_dirent));
+                    X_UNLOCK (wrklock);
+
+                    if (!dents)
+                      break;
+                  }
+
+                ent = dents + dentoffs;
+
+                ent->name    = names + namesoffs;
+                ent->namelen = len - 1;
+                ent->inode   = D_INO (entp);
+
+                switch (D_TYPE (entp))
+                  {
+                    default:
+                      ent->type = EIO_DT_UNKNOWN;
+                      flags |= EIO_READDIR_FOUND_UNKNOWN;
+                      break;
+
+                    #ifdef DT_FIFO
+                      case DT_FIFO: ent->type = EIO_DT_FIFO; break;
+                    #endif
+                    #ifdef DT_CHR
+                      case DT_CHR:  ent->type = EIO_DT_CHR;  break;
+                    #endif          
+                    #ifdef DT_DIR   
+                      case DT_DIR:  ent->type = EIO_DT_DIR;  break;
+                    #endif          
+                    #ifdef DT_BLK   
+                      case DT_BLK:  ent->type = EIO_DT_BLK;  break;
+                    #endif          
+                    #ifdef DT_REG   
+                      case DT_REG:  ent->type = EIO_DT_REG;  break;
+                    #endif          
+                    #ifdef DT_LNK   
+                      case DT_LNK:  ent->type = EIO_DT_LNK;  break;
+                    #endif
+                    #ifdef DT_SOCK
+                      case DT_SOCK: ent->type = EIO_DT_SOCK; break;
+                    #endif
+                    #ifdef DT_WHT
+                      case DT_WHT:  ent->type = EIO_DT_WHT;  break;
+                    #endif
+                  }
+
+                ent->score = 0;
+
+                if (flags & EIO_READDIR_DIRS_FIRST)
+                  {
+                    if (ent->type == EIO_DT_UNKNOWN)
+                      {
+                        if (*name == '.') /* leading dots are likely directories, and, in any case, rare */
+                          ent->score = 98;
+                        else if (!strchr (name, '.')) /* absense of dots indicate likely dirs */
+                          ent->score = len <= 4 ? 5 : len <= 7 ? 4 : 1; /* shorter == more likely dir, but avoid too many classes */
+                      }
+                    else if (ent->type == DT_DIR)
+                      ent->score = 100;
+                  }
+              }
+
+            namesoffs += len;
+            ++dentoffs;
           }
       }
+  else
+    req->result = -1;
 
-  if (errno)
-    res = -1;
-  
-  req->result = res;
+  /* if user doesn't want the dents, do not provide it */
+  if (!(flags & EIO_READDIR_DENTS))
+    {
+      X_LOCK (wrklock);
+      free (dents);
+      req->ptr2 = req->ptr1;
+      req->ptr1 = 0;
+      X_UNLOCK (wrklock);
+    }
 }
 
 #if !(_POSIX_MAPPED_FILES && _POSIX_SYNCHRONIZED_IO)
@@ -1447,9 +1609,9 @@ eio_req *eio_rmdir (const char *path, int pri, eio_cb cb, void *data)
   return eio__1path (EIO_RMDIR, path, pri, cb, data);
 }
 
-eio_req *eio_readdir (const char *path, int pri, eio_cb cb, void *data)
+eio_req *eio_readdir (const char *path, int flags, int pri, eio_cb cb, void *data)
 {
-  return eio__1path (EIO_READDIR, path, pri, cb, data);
+  REQ (EIO_READDIR); PATH; req->int1 = flags; SEND;
 }
 
 eio_req *eio_mknod (const char *path, mode_t mode, dev_t dev, int pri, eio_cb cb, void *data)
