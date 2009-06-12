@@ -6,6 +6,8 @@ TODO: maybe add mincore support? available on at leats darwin, solaris, linux, f
         - readdir: correctly handle malloc failures.
         - readdir: new flags argument, can return inode
           and possibly filetype, can sort in various ways.
+        - readdir: stop immediately when cancelled, do
+          not continue reading the directory.
 	- added EIO_STACKSIZE.
 	- added msync, mtouch support (untested).
         - added sync_file_range (untested).

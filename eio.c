@@ -1213,9 +1213,13 @@ eio__scandir (eio_req *req, etp_worker *self)
             namesoffs += len;
             ++dentoffs;
           }
+
+        if (EIO_CANCELLED (req))
+          {
+            errno = ECANCELED;
+            break;
+          }
       }
-  else
-    req->result = -1;
 }
 
 #if !(_POSIX_MAPPED_FILES && _POSIX_SYNCHRONIZED_IO)
