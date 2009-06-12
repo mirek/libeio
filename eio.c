@@ -1004,54 +1004,59 @@ eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 static void
 eio_dent_sort (eio_dirent *dents, int size)
 {
-  /* should be good for 2**31 entries */
-  struct rng { int l, r; } rng [32];
   int i, j;
 
-  i = 0;
-  rng[0].l = 0;
-  rng[0].r = size;
-
-  while (expect_true (i >= 0))
+  if (size > EIO_QSORT_CUTOFF * 3) /* skip quicksort for small directories */
     {
-      int L = rng [i].l;
-      int R = rng [i].r - 1;
+      /* first, use quicksort */
+      /* should be good for 2**31 entries */
+      struct rng { int l, r; } rng [32];
 
-      if (expect_false (L + EIO_QSORT_CUTOFF < R))
+      i = 0;
+      rng[0].l = 0;
+      rng[0].r = size;
+
+      while (expect_true (i >= 0))
         {
-          eio_dirent piv = dents [L];
+          int L = rng [i].l;
+          int R = rng [i].r - 1;
 
-          while (L < R)
+          if (expect_false (L + EIO_QSORT_CUTOFF < R))
             {
-              while (eio_dent_cmp (&dents [R], &piv) >= 0 && L < R)
-                --R;
+              eio_dirent piv = dents [L];
 
-              if (L < R)
-                dents [L++] = dents [R];
+              while (L < R)
+                {
+                  while (eio_dent_cmp (&dents [R], &piv) >= 0 && L < R)
+                    --R;
 
-              while (eio_dent_cmp (&dents [L], &piv) <= 0 && L < R)
-                ++L;
+                  if (L < R)
+                    dents [L++] = dents [R];
 
-              if (L < R)
-                dents [R--] = dents [L];
+                  while (eio_dent_cmp (&dents [L], &piv) <= 0 && L < R)
+                    ++L;
+
+                  if (L < R)
+                    dents [R--] = dents [L];
+                }
+
+              dents [L] = piv;
+
+              ++i;
+              rng [i].l = L + 1;
+              rng [i].r = rng [i - 1].r;
+              rng [i - 1].r = L;
+
+              if (rng [i].r - rng [i].l > rng [i - 1].r - rng [i - 1].l)
+                {
+                  struct rng t;
+
+                  t = rng [i]; rng [i] = rng [i - 1]; rng [i - 1] = t;
+                }
             }
-
-          dents [L] = piv;
-
-          ++i;
-          rng [i].l = L + 1;
-          rng [i].r = rng [i - 1].r;
-          rng [i - 1].r = L;
-
-          if (rng [i].r - rng [i].l > rng [i - 1].r - rng [i - 1].l)
-            {
-              struct rng t;
-
-              t = rng [i]; rng [i] = rng [i - 1]; rng [i - 1] = t;
-            }
+          else
+            --i;
         }
-      else
-        --i;
     }
 
   /* use a simple insertion sort at the end */
