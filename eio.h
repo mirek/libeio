@@ -99,7 +99,7 @@ struct eio_dirent {
   ino_t inode;
   unsigned short namelen;
   unsigned char type;
-  unsigned char score; /* internal use */
+  signed char score; /* internal use */
   /* 0-4 bytes padding */
 };
 

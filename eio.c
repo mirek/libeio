@@ -75,6 +75,7 @@
 # include "config.h"
 # include <sys/time.h>
 # include <sys/select.h>
+# include <sys/mman.h>
 # include <unistd.h>
 # include <utime.h>
 # include <signal.h>
@@ -991,14 +992,78 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
   return res;
 }
 
-static int
-eio_dent_cmp (const void *a_, const void *b_)
+static signed char
+eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 {
-  const eio_dirent *a = (const eio_dirent *)a_;
-  const eio_dirent *b = (const eio_dirent *)b_;
+  return b->score - a->score ? b->score - a->score /* works because our signed char is always 0..100 */
+         : a->inode < b->inode ? -1 : a->inode > b->inode ? 1 : 0;
+}
 
-  return (int)b->score - (int)a->score ? (int)b->score - (int)a->score
-         : a->inode < b->inode ? -1 : a->inode > b->inode ? 1 : 0; /* int might be < ino_t */
+#define EIO_QSORT_CUTOFF 20 /* quite high, but performs well on many filesystems */
+
+static void
+eio_dent_sort (eio_dirent *dents, int size)
+{
+  /* should be good for 2**31 entries */
+  struct rng { int l, r; } rng [32];
+  int i, j;
+
+  i = 0;
+  rng[0].l = 0;
+  rng[0].r = size;
+
+  while (expect_true (i >= 0))
+    {
+      int L = rng [i].l;
+      int R = rng [i].r - 1;
+
+      if (expect_false (L + EIO_QSORT_CUTOFF < R))
+        {
+          eio_dirent piv = dents [L];
+
+          while (L < R)
+            {
+              while (eio_dent_cmp (&dents [R], &piv) >= 0 && L < R)
+                --R;
+
+              if (L < R)
+                dents [L++] = dents [R];
+
+              while (eio_dent_cmp (&dents [L], &piv) <= 0 && L < R)
+                ++L;
+
+              if (L < R)
+                dents [R--] = dents [L];
+            }
+
+          dents [L] = piv;
+
+          ++i;
+          rng [i].l = L + 1;
+          rng [i].r = rng [i - 1].r;
+          rng [i - 1].r = L;
+
+          if (rng [i].r - rng [i].l > rng [i - 1].r - rng [i - 1].l)
+            {
+              struct rng t;
+
+              t = rng [i]; rng [i] = rng [i - 1]; rng [i - 1] = t;
+            }
+        }
+      else
+        --i;
+    }
+
+  /* use a simple insertion sort at the end */
+  for (i = 1; i < size; ++i)
+    {
+      eio_dirent value = dents [i];
+
+      for (j = i - 1; j >= 0 && eio_dent_cmp (&dents [j], &value) > 0; --j)
+        dents [j + 1] = dents [j];
+
+      dents [j + 1] = value;
+    }
 }
 
 /* read a full directory */
@@ -1007,7 +1072,7 @@ eio__scandir (eio_req *req, etp_worker *self)
 {
   DIR *dirp;
   EIO_STRUCT_DIRENT *entp;
-  unsigned char *name, *names;
+  char *name, *names;
   int namesalloc = 4096;
   int namesoffs = 0;
   int flags = req->int1;
@@ -1053,10 +1118,7 @@ eio__scandir (eio_req *req, etp_worker *self)
 
             if (flags & EIO_READDIR_STAT_ORDER
                 || !(~flags & (EIO_READDIR_DIRS_FIRST | EIO_READDIR_FOUND_UNKNOWN)))
-              {
-                /* pray your qsort doesn't use quicksort */
-                qsort (dents, dentoffs, sizeof (*dents), eio_dent_cmp); /* score depends of DIRS_FIRST */
-              }
+              eio_dent_sort (dents, dentoffs); /* score depends of DIRS_FIRST */
             else if (flags & EIO_READDIR_DIRS_FIRST)
               {
                 /* in this case, all is known, and we just put dirs first and sort them */
@@ -1064,7 +1126,7 @@ eio__scandir (eio_req *req, etp_worker *self)
                 eio_dirent *dir = dents;
 
                 /* now move dirs to the front, and non-dirs to the back */
-                /* by walkign from both sides and swapping if necessary */
+                /* by walking from both sides and swapping if necessary */
                 while (ent > dir)
                   {
                     if (dir->type == DT_DIR)
@@ -1085,7 +1147,7 @@ eio__scandir (eio_req *req, etp_worker *self)
                   }
 
                 /* now sort the dirs only */
-                qsort (dents, dir - dents, sizeof (*dents), eio_dent_cmp);
+                eio_dent_sort (dents, dir - dents);
               }
 
             /* only provide the names array unless DENTS is specified */
@@ -1750,12 +1812,15 @@ void eio_grp_add (eio_req *grp, eio_req *req)
 ssize_t eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count)
 {
   etp_worker wrk;
+  ssize_t ret;
 
   wrk.dbuf = 0;
 
-  eio__sendfile (ofd, ifd, offset, count, &wrk);
+  ret = eio__sendfile (ofd, ifd, offset, count, &wrk);
 
   if (wrk.dbuf)
     free (wrk.dbuf);
+
+  return ret;
 }
 

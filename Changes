@@ -8,6 +8,8 @@ TODO: maybe add mincore support? available on at leats darwin, solaris, linux, f
           and possibly filetype, can sort in various ways.
         - readdir: stop immediately when cancelled, do
           not continue reading the directory.
+        - fix return value of eio_sendfile_sync.
+        - include sys/mman.h for msync.
 	- added EIO_STACKSIZE.
 	- added msync, mtouch support (untested).
         - added sync_file_range (untested).
