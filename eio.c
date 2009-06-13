@@ -995,18 +995,24 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 static signed char
 eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 {
-  return b->score - a->score ? b->score - a->score /* works because our signed char is always 0..100 */
-         : a->inode < b->inode ? -1 : a->inode > b->inode ? 1 : 0;
+    return b->score - a->score ? b->score - a->score /* works because our signed char is always 0..100 */
+              : a->inode < b->inode ? -1 : a->inode > b->inode ? 1 : 0;
 }
 
-#define EIO_QSORT_CUTOFF 20 /* quite high, but performs well on many filesystems */
+#define EIO_DENT_CMP(i,op,j) eio_dent_cmp (&i, &j) op 0
+
+#define EIO_QSORT_CUTOFF 30 /* quite high, but performs well on many filesystems */
+#define EIO_QSORT_SKIP   60 /* when to skip qsort completely */
 
 static void
 eio_dent_sort (eio_dirent *dents, int size)
 {
   int i, j;
 
-  if (size > EIO_QSORT_CUTOFF * 3) /* skip quicksort for small directories */
+  if (size <= 1)
+    return; /* our insertion sort relies on size > 0 */
+
+  if (size > EIO_QSORT_SKIP) /* skip quicksort for small directories */
     {
       /* first, use quicksort */
       /* should be good for 2**31 entries */
@@ -1027,13 +1033,13 @@ eio_dent_sort (eio_dirent *dents, int size)
 
               while (L < R)
                 {
-                  while (eio_dent_cmp (&dents [R], &piv) >= 0 && L < R)
+                  while (EIO_DENT_CMP (dents [R], >=, piv) && L < R)
                     --R;
 
                   if (L < R)
                     dents [L++] = dents [R];
 
-                  while (eio_dent_cmp (&dents [L], &piv) <= 0 && L < R)
+                  while (EIO_DENT_CMP (dents [L], <=, piv) && L < R)
                     ++L;
 
                   if (L < R)
@@ -1059,12 +1065,27 @@ eio_dent_sort (eio_dirent *dents, int size)
         }
     }
 
-  /* use a simple insertion sort at the end */
+  /* use an insertion sort after qsort, or for small arrays */
+  /* first move the smallest element to the front, to act as a sentinel */
+  {
+    int min = 0;
+
+    for (i = size > EIO_QSORT_SKIP ? EIO_QSORT_CUTOFF : size; --i; )
+      if (EIO_DENT_CMP (dents [i], <, dents [min]))
+        min = i;
+
+    /* swap elements 0 and j (minimum) */
+    {
+      eio_dirent tmp = dents [0]; dents [0] = dents [min]; dents [min] = tmp;
+    }
+  }
+
+  /* then do standard insertion sort */
   for (i = 1; i < size; ++i)
     {
       eio_dirent value = dents [i];
 
-      for (j = i - 1; j >= 0 && eio_dent_cmp (&dents [j], &value) > 0; --j)
+      for (j = i - 1; EIO_DENT_CMP (dents [j], >, value); --j)
         dents [j + 1] = dents [j];
 
       dents [j + 1] = value;
