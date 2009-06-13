@@ -1070,7 +1070,7 @@ eio_dent_sort (eio_dirent *dents, int size)
   {
     int min = 0;
 
-    for (i = size > EIO_QSORT_SKIP ? EIO_QSORT_CUTOFF : size; --i; )
+    for (i = size > EIO_QSORT_SKIP ? EIO_QSORT_CUTOFF + 1 : size; --i; )
       if (EIO_DENT_CMP (dents [i], <, dents [min]))
         min = i;
 
@@ -1086,7 +1086,10 @@ eio_dent_sort (eio_dirent *dents, int size)
       eio_dirent value = dents [i];
 
       for (j = i - 1; EIO_DENT_CMP (dents [j], >, value); --j)
+        {
+          assert (j >= 0);
         dents [j + 1] = dents [j];
+        }
 
       dents [j + 1] = value;
     }
