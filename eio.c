@@ -1000,6 +1000,7 @@ eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 }
 
 #define EIO_DENT_CMP(i,op,j) eio_dent_cmp (&i, &j) op 0
+#define EIO_DENT_NUM_SCORES 9
 
 #define EIO_QSORT_CUTOFF 30 /* quite high, but performs well on many filesystems */
 #define EIO_QSORT_SKIP   60 /* when to skip qsort completely */
@@ -1007,8 +1008,6 @@ eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 static void
 eio_dent_sort (eio_dirent *dents, int size)
 {
-  int i, j;
-
   if (size <= 1)
     return; /* our insertion sort relies on size > 0 */
 
@@ -1016,37 +1015,39 @@ eio_dent_sort (eio_dirent *dents, int size)
     {
       /* first, use quicksort */
       /* should be good for 2**31 entries */
-      struct rng { int l, r; } rng [32];
+      int i;
+      struct rng { eio_dirent *l, *r; } rng [32];
 
       i = 0;
-      rng[0].l = 0;
-      rng[0].r = size;
+      rng[0].l = dents;
+      rng[0].r = dents + size;
 
       while (expect_true (i >= 0))
         {
-          int L = rng [i].l;
-          int R = rng [i].r - 1;
+          eio_dirent *L = rng [i].l;
+          eio_dirent *R = rng [i].r - 1;
 
           if (expect_false (L + EIO_QSORT_CUTOFF < R))
             {
-              eio_dirent piv = dents [L];
+              eio_dirent *mid = &dents [((L - dents) + (R - dents)) >> 1];
+              eio_dirent piv = *mid; *mid = *L; *L = piv;
 
               while (L < R)
                 {
-                  while (EIO_DENT_CMP (dents [R], >=, piv) && L < R)
+                  while (EIO_DENT_CMP (*R, >=, piv) && L < R)
                     --R;
 
                   if (L < R)
-                    dents [L++] = dents [R];
+                    *L++ = *R;
 
-                  while (EIO_DENT_CMP (dents [L], <=, piv) && L < R)
+                  while (EIO_DENT_CMP (*L, <=, piv) && L < R)
                     ++L;
 
                   if (L < R)
-                    dents [R--] = dents [L];
+                    *R-- = *L;
                 }
 
-              dents [L] = piv;
+              *L = piv;
 
               ++i;
               rng [i].l = L + 1;
@@ -1068,31 +1069,33 @@ eio_dent_sort (eio_dirent *dents, int size)
   /* use an insertion sort after qsort, or for small arrays */
   /* first move the smallest element to the front, to act as a sentinel */
   {
-    int min = 0;
-
+    int i;
+    eio_dirent *min = dents;
+    
     for (i = size > EIO_QSORT_SKIP ? EIO_QSORT_CUTOFF + 1 : size; --i; )
-      if (EIO_DENT_CMP (dents [i], <, dents [min]))
-        min = i;
+      if (EIO_DENT_CMP (dents [i], <, *min))
+        min = &dents [i];
 
     /* swap elements 0 and j (minimum) */
     {
-      eio_dirent tmp = dents [0]; dents [0] = dents [min]; dents [min] = tmp;
+      eio_dirent tmp = *dents; *dents = *min; *min = tmp;
     }
   }
 
-  /* then do standard insertion sort */
-  for (i = 1; i < size; ++i)
-    {
-      eio_dirent value = dents [i];
+  {
+    /* then do standard insertion sort */
+    eio_dirent *i, *j;
 
-      for (j = i - 1; EIO_DENT_CMP (dents [j], >, value); --j)
-        {
-          assert (j >= 0);
-        dents [j + 1] = dents [j];
-        }
+    for (i = dents + 1; i < dents + size; ++i)
+      {
+        eio_dirent value = *i;
 
-      dents [j + 1] = value;
-    }
+        for (j = i - 1; EIO_DENT_CMP (*j, >, value); --j)
+          j [1] = j [0];
+
+        j [1] = value;
+      }
+  }
 }
 
 /* read a full directory */
@@ -1159,7 +1162,10 @@ eio__scandir (eio_req *req, etp_worker *self)
                 while (ent > dir)
                   {
                     if (dir->type == DT_DIR)
-                      ++dir;
+                      {
+                        dir->score = 0;
+                        ++dir;
+                      }
                     else 
                       {
                         --ent;
@@ -1170,6 +1176,7 @@ eio__scandir (eio_req *req, etp_worker *self)
                             *dir = *ent;
                             *ent = tmp;
 
+                            dir->score = 0;
                             ++dir;
                           }
                       }
@@ -1232,7 +1239,7 @@ eio__scandir (eio_req *req, etp_worker *self)
 
                 ent->name    = (char *)(size_t)namesoffs; /* rather dirtily we store the offset in the pointer */
                 ent->namelen = len - 1;
-                ent->inode   = D_INO (entp);
+                ent->inode   = D_INO (entp) ? D_INO (entp) : dentoffs;
 
                 switch (D_TYPE (entp))
                   {
@@ -1292,12 +1299,12 @@ eio__scandir (eio_req *req, etp_worker *self)
                     if (ent->type == EIO_DT_UNKNOWN)
                       {
                         if (*name == '.') /* leading dots are likely directories, and, in any case, rare */
-                          ent->score = 98;
+                          ent->score = 7;
                         else if (!strchr (name, '.')) /* absense of dots indicate likely dirs */
-                          ent->score = len <= 2 ? len + 6 : len <= 4 ? 5 : len <= 7 ? 4 : 1; /* shorter == more likely dir, but avoid too many classes */
+                          ent->score = len <= 2 ? len + 4 : len <= 4 ? 3 : len <= 7 ? 2 : 1; /* shorter == more likely dir, but avoid too many classes */
                       }
                     else if (ent->type == EIO_DT_DIR)
-                      ent->score = 100;
+                      ent->score = 8;
                   }
               }
 
