@@ -95,12 +95,11 @@ enum eio_dtype {
 };
 
 struct eio_dirent {
-  char *name;
-  ino_t inode;
-  unsigned short namelen;
-  unsigned char type;
+  int nameofs; /* offset of null-terminated name string in (char *)req->ptr2 */
+  unsigned short namelen; /* size of filename without trailing 0 */
+  unsigned char type; /* one of EIO_DT_* */
   signed char score; /* internal use */
-  /* 0-4 bytes padding */
+  ino_t inode; /* the inode number, if available, otherwise unspecified */
 };
 
 /* eio_sync_file_range flags */
@@ -144,8 +143,8 @@ struct eio_req
   ssize_t result;  /* result of syscall, e.g. result = read (... */
   off_t offs;      /* read, write, truncate, readahead, sync_file_range: file offset */
   size_t size;     /* read, write, readahead, sendfile, msync, sync_file_range: length */
-  void *ptr1;      /* all applicable requests: pathname, old name; readdir: possible output memory buffer */
-  void *ptr2;      /* all applicable requests: new name or memory buffer */
+  void *ptr1;      /* all applicable requests: pathname, old name; readdir: optional eio_dirents */
+  void *ptr2;      /* all applicable requests: new name or memory buffer; readdir: name strings */
   eio_tstamp nv1;  /* utime, futime: atime; busy: sleep time */
   eio_tstamp nv2;  /* utime, futime: mtime */
 

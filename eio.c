@@ -995,84 +995,126 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 static signed char
 eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 {
-    return b->score - a->score ? b->score - a->score /* works because our signed char is always 0..100 */
+    return a->score - b->score ? a->score - b->score /* works because our signed char is always 0..100 */
               : a->inode < b->inode ? -1 : a->inode > b->inode ? 1 : 0;
 }
 
 #define EIO_DENT_CMP(i,op,j) eio_dent_cmp (&i, &j) op 0
-#define EIO_DENT_NUM_SCORES 9
 
-#define EIO_QSORT_CUTOFF 30 /* quite high, but performs well on many filesystems */
-#define EIO_QSORT_SKIP   60 /* when to skip qsort completely */
+#define EIO_SORT_CUTOFF 30 /* quite high, but performs well on many filesystems */
+#define EIO_SORT_FAST   60 /* when to only use insertion sort */
 
 static void
-eio_dent_sort (eio_dirent *dents, int size)
+eio_dent_radix_sort (eio_dirent *dents, int size, signed char score_bits, ino_t inode_bits)
 {
-  if (size <= 1)
-    return; /* our insertion sort relies on size > 0 */
+  unsigned char bits [9 + sizeof (ino_t) * 8];
+  unsigned char *bit = bits;
 
-  if (size > EIO_QSORT_SKIP) /* skip quicksort for small directories */
-    {
-      /* first, use quicksort */
-      /* should be good for 2**31 entries */
-      int i;
-      struct rng { eio_dirent *l, *r; } rng [32];
+  assert (CHAR_BIT == 8);
+  assert (sizeof (eio_dirent) * 8 < 256);
+  assert (offsetof (eio_dirent, inode)); /* we use 0 as sentinel */
+  assert (offsetof (eio_dirent, score)); /* we use 0 as sentinel */
 
-      i = 0;
-      rng[0].l = dents;
-      rng[0].r = dents + size;
+  if (size <= EIO_SORT_FAST)
+    return;
 
-      while (expect_true (i >= 0))
-        {
-          eio_dirent *L = rng [i].l;
-          eio_dirent *R = rng [i].r - 1;
+  /* first prepare an array of bits to test in our radix sort */
+  /* try to take endianness into account, as well as differences in ino_t sizes */
+  /* inode_bits must contain all inodes ORed together */
+  /* which is used to skip bits that are 0 everywhere, which is very common */
+  {
+    ino_t endianness;
+    int i, j;
 
-          if (expect_false (L + EIO_QSORT_CUTOFF < R))
-            {
-              eio_dirent *mid = &dents [((L - dents) + (R - dents)) >> 1];
-              eio_dirent piv = *mid; *mid = *L; *L = piv;
+    /* we store the byte offset of byte n into byte n of "endianness" */
+    for (i = 0; i < sizeof (ino_t); ++i)
+      ((unsigned char *)&endianness)[i] = i;
 
-              while (L < R)
+    *bit++ = 0;
+
+    for (i = 0; i < sizeof (ino_t); ++i)
+      {
+        /* shifting off the byte offsets out of "endianness" */
+        int offs = (offsetof (eio_dirent, inode) + (endianness & 0xff)) * 8;
+        endianness >>= 8;
+
+        for (j = 0; j < 8; ++j)
+          if (inode_bits & (((ino_t)1) << (i * 8 + j)))
+            *bit++ = offs + j;
+      }
+
+    for (j = 0; j < 8; ++j)
+      if (score_bits & (1 << j))
+        *bit++ = offsetof (eio_dirent, score) * 8 + j;
+  }
+
+  /* now actually do the sorting (a variant of MSD radix sort) */
+  {
+    eio_dirent    *base_stk [9 + sizeof (ino_t) * 8], *base;
+    eio_dirent    *end_stk  [9 + sizeof (ino_t) * 8], *end;
+    unsigned char *bit_stk  [9 + sizeof (ino_t) * 8];
+    int stk_idx = 0;
+
+    base_stk [stk_idx] = dents;
+    end_stk  [stk_idx] = dents + size;
+    bit_stk  [stk_idx] = bit - 1;
+
+    do
+      {
+        base = base_stk [stk_idx];
+        end  = end_stk  [stk_idx];
+        bit  = bit_stk  [stk_idx];
+
+        for (;;)
+          {
+            unsigned char O = *bit >> 3;
+            unsigned char M = 1 << (*bit & 7);
+
+            eio_dirent *a = base;
+            eio_dirent *b = end;
+
+            if (b - a < EIO_SORT_CUTOFF)
+              break;
+
+            /* now bit-partition the array on the bit */
+            /* this ugly asymmetric loop seems to perform much better than typical */
+            /* partition algos found in the literature */
+            do
+              if (!(((unsigned char *)a)[O] & M))
+                ++a;
+              else if (!(((unsigned char *)--b)[O] & M))
                 {
-                  while (EIO_DENT_CMP (*R, >=, piv) && L < R)
-                    --R;
-
-                  if (L < R)
-                    *L++ = *R;
-
-                  while (EIO_DENT_CMP (*L, <=, piv) && L < R)
-                    ++L;
-
-                  if (L < R)
-                    *R-- = *L;
+                  eio_dirent tmp = *a; *a = *b; *b = tmp;
+                  ++a;
                 }
+            while (b > a);
 
-              *L = piv;
+            /* next bit, or stop, if no bits left in this path */
+            if (!*--bit)
+              break;
 
-              ++i;
-              rng [i].l = L + 1;
-              rng [i].r = rng [i - 1].r;
-              rng [i - 1].r = L;
+            base_stk [stk_idx] = a;
+            end_stk  [stk_idx] = end;
+            bit_stk  [stk_idx] = bit;
+            ++stk_idx;
 
-              if (rng [i].r - rng [i].l > rng [i - 1].r - rng [i - 1].l)
-                {
-                  struct rng t;
+            end = a;
+          }
+      }
+    while (stk_idx--);
+  }
+}
 
-                  t = rng [i]; rng [i] = rng [i - 1]; rng [i - 1] = t;
-                }
-            }
-          else
-            --i;
-        }
-    }
-
-  /* use an insertion sort after qsort, or for small arrays */
+static void
+eio_dent_insertion_sort (eio_dirent *dents, int size)
+{
   /* first move the smallest element to the front, to act as a sentinel */
   {
     int i;
     eio_dirent *min = dents;
     
-    for (i = size > EIO_QSORT_SKIP ? EIO_QSORT_CUTOFF + 1 : size; --i; )
+    /* the radix pre-pass ensures that the minimum element is in the first EIO_SORT_CUTOFF + 1 elements */
+    for (i = size > EIO_SORT_FAST ? EIO_SORT_CUTOFF + 1 : size; --i; )
       if (EIO_DENT_CMP (dents [i], <, *min))
         min = &dents [i];
 
@@ -1082,8 +1124,8 @@ eio_dent_sort (eio_dirent *dents, int size)
     }
   }
 
+  /* then do standard insertion sort, assuming that all elements are >= dents [0] */
   {
-    /* then do standard insertion sort */
     eio_dirent *i, *j;
 
     for (i = dents + 1; i < dents + size; ++i)
@@ -1096,6 +1138,21 @@ eio_dent_sort (eio_dirent *dents, int size)
         j [1] = value;
       }
   }
+}
+
+static void
+eio_dent_sort (eio_dirent *dents, int size, signed char score_bits, ino_t inode_bits)
+{
+  if (size <= 1)
+    return; /* our insertion sort relies on size > 0 */
+
+  /* first we use a radix sort, but only for dirs >= EIO_SORT_FAST */
+  /* and stop sorting when the partitions are <= EIO_SORT_CUTOFF */
+  eio_dent_radix_sort (dents, size, score_bits, inode_bits);
+
+  /* use an insertion sort at the end, or for small arrays, */
+  /* as insertion sort is more efficient for small partitions */
+  eio_dent_insertion_sort (dents, size);
 }
 
 /* read a full directory */
@@ -1111,6 +1168,7 @@ eio__scandir (eio_req *req, etp_worker *self)
   eio_dirent *dents = 0;
   int dentalloc = 128;
   int dentoffs = 0;
+  ino_t inode_bits = 0;
 
   req->result = -1;
 
@@ -1121,8 +1179,8 @@ eio__scandir (eio_req *req, etp_worker *self)
   /* the corresponding closedir is in ETP_WORKER_CLEAR */
   self->dirp = dirp = opendir (req->ptr1);
   req->flags |= EIO_FLAG_PTR1_FREE | EIO_FLAG_PTR2_FREE;
-  req->ptr1 = names = malloc (namesalloc);
-  req->ptr2 = dents = flags ? malloc (dentalloc * sizeof (eio_dirent)) : 0;
+  req->ptr1 = dents = flags ? malloc (dentalloc * sizeof (eio_dirent)) : 0;
+  req->ptr2 = names = malloc (namesalloc);
   X_UNLOCK (wrklock);
 
   if (dirp && names && (!flags || dents))
@@ -1140,61 +1198,35 @@ eio__scandir (eio_req *req, etp_worker *self)
             req->int1   = flags;
             req->result = dentoffs;
 
-            if (dents)
-              {
-                eio_dirent *ent = dents + dentoffs;
-
-                while (ent > dents)
-                  (--ent)->name = names + (size_t)ent->name;
-              }
-
-            if (flags & EIO_READDIR_STAT_ORDER
-                || !(~flags & (EIO_READDIR_DIRS_FIRST | EIO_READDIR_FOUND_UNKNOWN)))
-              eio_dent_sort (dents, dentoffs); /* score depends of DIRS_FIRST */
+            if (flags & EIO_READDIR_STAT_ORDER)
+              eio_dent_sort (dents, dentoffs, 0, inode_bits); /* sort by inode exclusively */
             else if (flags & EIO_READDIR_DIRS_FIRST)
-              {
-                /* in this case, all is known, and we just put dirs first and sort them */
-                eio_dirent *ent = dents + dentoffs;
-                eio_dirent *dir = dents;
+              if (flags & EIO_READDIR_FOUND_UNKNOWN)
+                eio_dent_sort (dents, dentoffs, 7, inode_bits); /* sort by score and inode */
+              else
+                {
+                  /* in this case, all is known, and we just put dirs first and sort them */
+                  eio_dirent *oth = dents + dentoffs;
+                  eio_dirent *dir = dents;
 
-                /* now move dirs to the front, and non-dirs to the back */
-                /* by walking from both sides and swapping if necessary */
-                while (ent > dir)
-                  {
-                    if (dir->type == DT_DIR)
-                      {
-                        dir->score = 0;
+                  /* now partition dirs to the front, and non-dirs to the back */
+                  /* by walking from both sides and swapping if necessary */
+                  /* also clear score, so it doesn't influence sorting */
+                  while (oth > dir)
+                    {
+                      if (dir->type == EIO_DT_DIR)
                         ++dir;
-                      }
-                    else 
-                      {
-                        --ent;
+                      else if ((--oth)->type == EIO_DT_DIR)
+                        {
+                          eio_dirent tmp = *dir; *dir = *oth; *oth = tmp;
 
-                        if (ent->type == DT_DIR)
-                          {
-                            eio_dirent tmp = *dir;
-                            *dir = *ent;
-                            *ent = tmp;
+                          ++dir;
+                        }
+                    }
 
-                            dir->score = 0;
-                            ++dir;
-                          }
-                      }
-                  }
-
-                /* now sort the dirs only */
-                eio_dent_sort (dents, dir - dents);
-              }
-
-            /* only provide the names array unless DENTS is specified */
-            if (!(flags & EIO_READDIR_DENTS))
-              {
-                X_LOCK (wrklock);
-                assert (!dents);
-                req->ptr1 = 0;
-                req->ptr2 = names;
-                X_UNLOCK (wrklock);
-              }
+                  /* now sort the dirs only */
+                  eio_dent_sort (dents, dir - dents, 0, inode_bits);
+                }
 
             break;
           }
@@ -1211,7 +1243,7 @@ eio__scandir (eio_req *req, etp_worker *self)
               {
                 namesalloc *= 2;
                 X_LOCK (wrklock);
-                req->ptr1 = names = realloc (names, namesalloc);
+                req->ptr2 = names = realloc (names, namesalloc);
                 X_UNLOCK (wrklock);
 
                 if (!names)
@@ -1228,7 +1260,7 @@ eio__scandir (eio_req *req, etp_worker *self)
                   {
                     dentalloc *= 2;
                     X_LOCK (wrklock);
-                    req->ptr2 = dents = realloc (dents, dentalloc * sizeof (eio_dirent));
+                    req->ptr1 = dents = realloc (dents, dentalloc * sizeof (eio_dirent));
                     X_UNLOCK (wrklock);
 
                     if (!dents)
@@ -1237,9 +1269,11 @@ eio__scandir (eio_req *req, etp_worker *self)
 
                 ent = dents + dentoffs;
 
-                ent->name    = (char *)(size_t)namesoffs; /* rather dirtily we store the offset in the pointer */
+                ent->nameofs = namesoffs; /* rather dirtily we store the offset in the pointer */
                 ent->namelen = len - 1;
-                ent->inode   = D_INO (entp) ? D_INO (entp) : dentoffs;
+                ent->inode   = D_INO (entp);
+
+                inode_bits |= ent->inode;
 
                 switch (D_TYPE (entp))
                   {
@@ -1292,19 +1326,19 @@ eio__scandir (eio_req *req, etp_worker *self)
                     #endif
                   }
 
-                ent->score = 0;
+                ent->score = 7;
 
                 if (flags & EIO_READDIR_DIRS_FIRST)
                   {
                     if (ent->type == EIO_DT_UNKNOWN)
                       {
                         if (*name == '.') /* leading dots are likely directories, and, in any case, rare */
-                          ent->score = 7;
+                          ent->score = 1;
                         else if (!strchr (name, '.')) /* absense of dots indicate likely dirs */
-                          ent->score = len <= 2 ? len + 4 : len <= 4 ? 3 : len <= 7 ? 2 : 1; /* shorter == more likely dir, but avoid too many classes */
+                          ent->score = len <= 2 ? 4 - len : len <= 4 ? 4 : len <= 7 ? 5 : 6; /* shorter == more likely dir, but avoid too many classes */
                       }
                     else if (ent->type == EIO_DT_DIR)
-                      ent->score = 8;
+                      ent->score = 0;
                   }
               }
 
