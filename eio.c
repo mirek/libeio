@@ -869,7 +869,7 @@ eio__sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags)
 #endif
 
   /* even though we could play tricks with the flags, it's better to always
-   * call fdatasync, as thta matches the expectation of it's users best */
+   * call fdatasync, as that matches the expectation of its users best */
   return fdatasync (fd);
 }
 
