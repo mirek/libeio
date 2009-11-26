@@ -16,4 +16,5 @@ TODO: maybe add mincore support? available on at leats darwin, solaris, linux, f
         - fixed custom support.
         - use a more robust feed-add detection method.
 	- "outbundled" from IO::AIO.
+        - eio_set_max_polltime did not properly convert time to ticks.
 

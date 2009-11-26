@@ -198,7 +198,7 @@ static void eio_execute (struct etp_worker *self, eio_req *req);
 
 #define ETP_NUM_PRI (ETP_PRI_MAX - ETP_PRI_MIN + 1)
 
-/* calculcate time difference in ~1/EIO_TICKS of a second */
+/* calculate time difference in ~1/EIO_TICKS of a second */
 static int tvdiff (struct timeval *tv1, struct timeval *tv2)
 {
   return  (tv2->tv_sec  - tv1->tv_sec ) * EIO_TICKS
@@ -600,7 +600,7 @@ static void etp_submit (ETP_REQ *req)
 static void etp_set_max_poll_time (double nseconds)
 {
   if (WORDACCESS_UNSAFE) X_LOCK   (reslock);
-  max_poll_time = nseconds;
+  max_poll_time = nseconds * EIO_TICKS;
   if (WORDACCESS_UNSAFE) X_UNLOCK (reslock);
 }
 
