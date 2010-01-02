@@ -115,7 +115,6 @@
 #  include <sys/socket.h>
 # elif __solaris
 #  include <sys/sendfile.h>
-# elif defined _WIN32
 # else
 #  error sendfile support requested but not available
 # endif
@@ -926,13 +925,13 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
       res = sbytes;
   }
 
-# elif defined __APPLE__
+# elif defined (__APPLE__)
 
   {
-    off_t bytes = count;
-    res = sendfile (ifd, ofd, offset, &bytes, 0, 0);
+    off_t sbytes = count;
+    res = sendfile (ifd, ofd, offset, &sbytes, 0, 0);
 
-    if (res < 0 && errno == EAGAIN && bytes)
+    if (res < 0 && errno == EAGAIN && sbytes)
       res = sbytes;
   }
 
@@ -956,7 +955,8 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
   }
 
 # endif
-#elif defined _WIN32
+
+#elif defined (_WIN32)
 
   /* does not work, just for documentation of what would need to be done */
   {
