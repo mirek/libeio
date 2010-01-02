@@ -1,7 +1,7 @@
 /*
  * libeio implementation
  *
- * Copyright (c) 2007,2008,2009 Marc Alexander Lehmann <libeio@schmorp.de>
+ * Copyright (c) 2007,2008,2009,2010 Marc Alexander Lehmann <libeio@schmorp.de>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modifica-
@@ -972,10 +972,10 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 
   if (res <  0
       && (errno == ENOSYS || errno == EINVAL || errno == ENOTSOCK
+          || errno == ENOTSUP || errno == EOPNOTSUPP /* BSDs */
 #if __solaris
           || errno == EAFNOSUPPORT || errno == EPROTOTYPE
 #endif
-          || errno == ENOTSUP || errno == EOPNOTSUPP
          )
       )
     {
@@ -1376,8 +1376,25 @@ eio__scandir (eio_req *req, etp_worker *self)
 }
 
 #if !(_POSIX_MAPPED_FILES && _POSIX_SYNCHRONIZED_IO)
-# undef msync
-# define msync(a,b,c) ((errno = ENOSYS), -1)
+# define eio__msync(a,b,c) ((errno = ENOSYS), -1)
+#else
+
+int
+eio__msync (void *mem, size_t len, int flags)
+{
+  if (EIO_MS_ASYNC         != MS_SYNC
+      || EIO_MS_INVALIDATE != MS_INVALIDATE
+      || EIO_MS_SYNC       != MS_SYNC)
+    {
+      flags = 0
+         | (flags & EIO_MS_ASYNC      ? MS_ASYNC : 0)
+         | (flags & EIO_MS_INVALIDATE ? MS_INVALIDATE : 0)
+         | (flags & EIO_MS_SYNC       ? MS_SYNC : 0);
+    }
+
+  return msync (mem, len, flags);
+}
+
 #endif
 
 int
@@ -1398,7 +1415,7 @@ eio__mtouch (void *mem, size_t len, int flags)
   addr &= ~(page - 1); /* assume page size is always a power of two */
 
   if (addr < end)
-    if (flags) /* modify */
+    if (flags & EIO_MT_MODIFY) /* modify */
       do { *((volatile sig_atomic_t *)addr) |= 0; } while ((addr += page) < len);
     else
       do { *((volatile sig_atomic_t *)addr)     ; } while ((addr += page) < len);
@@ -1580,7 +1597,7 @@ static void eio_execute (etp_worker *self, eio_req *req)
       case EIO_SYNC:      req->result = 0; sync (); break;
       case EIO_FSYNC:     req->result = fsync     (req->int1); break;
       case EIO_FDATASYNC: req->result = fdatasync (req->int1); break;
-      case EIO_MSYNC:     req->result = msync (req->ptr2, req->size, req->int1); break;
+      case EIO_MSYNC:     req->result = eio__msync (req->ptr2, req->size, req->int1); break;
       case EIO_MTOUCH:    req->result = eio__mtouch (req->ptr2, req->size, req->int1); break;
       case EIO_SYNC_FILE_RANGE: req->result = eio__sync_file_range (req->int1, req->offs, req->size, req->int2); break;
 
