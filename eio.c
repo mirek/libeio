@@ -975,6 +975,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 #if __solaris
           || errno == EAFNOSUPPORT || errno == EPROTOTYPE
 #endif
+          || errno == ENOTSUP || errno == EOPNOTSUPP
          )
       )
     {
