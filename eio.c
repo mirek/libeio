@@ -82,11 +82,11 @@
 # include <dirent.h>
 
 /* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
-# if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+# if __freebsd || defined __NetBSD__ || defined __OpenBSD__
 #  define _DIRENT_HAVE_D_TYPE /* sigh */
 #  define D_INO(de) (de)->d_fileno
 #  define D_NAMLEN(de) (de)->d_namlen
-# elif defined(__linux) || defined(d_ino) || _XOPEN_SOURCE >= 600
+# elif __linux || defined d_ino || _XOPEN_SOURCE >= 600
 #  define D_INO(de) (de)->d_ino
 # endif
 
@@ -108,13 +108,14 @@
 #if HAVE_SENDFILE
 # if __linux
 #  include <sys/sendfile.h>
-# elif __freebsd
+# elif __freebsd || defined __APPLE__
 #  include <sys/socket.h>
 #  include <sys/uio.h>
 # elif __hpux
 #  include <sys/socket.h>
-# elif __solaris /* not yet */
+# elif __solaris
 #  include <sys/sendfile.h>
+# elif defined _WIN32
 # else
 #  error sendfile support requested but not available
 # endif
@@ -925,6 +926,16 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
       res = sbytes;
   }
 
+# elif defined __APPLE__
+
+  {
+    off_t bytes = count;
+    res = sendfile (ifd, ofd, offset, &bytes, 0, 0);
+
+    if (res < 0 && errno == EAGAIN && bytes)
+      res = sbytes;
+  }
+
 # elif __hpux
   res = sendfile (ofd, ifd, offset, count, 0, 0);
 
@@ -945,6 +956,15 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
   }
 
 # endif
+#elif defined _WIN32
+
+  /* does not work, just for documentation of what would need to be done */
+  {
+    HANDLE h = TO_SOCKET (ifd);
+    SetFilePointer (h, offset, 0, FILE_BEGIN);
+    res = TransmitFile (TO_SOCKET (ofd), h, count, 0, 0, 0, 0);
+  }
+
 #else
   res = -1;
   errno = ENOSYS;
@@ -1373,6 +1393,7 @@ eio__mtouch (void *mem, size_t len, int flags)
     page = sysconf (_SC_PAGESIZE);
 #endif
 
+  /* round down to start of page, although this is probably useless */
   addr &= ~(page - 1); /* assume page size is always a power of two */
 
   if (addr < end)
