@@ -82,7 +82,7 @@
 # include <dirent.h>
 
 /* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
-# if __freebsd || defined __NetBSD__ || defined __OpenBSD__
+# if __FreeBSD__ || defined __NetBSD__ || defined __OpenBSD__
 #  define _DIRENT_HAVE_D_TYPE /* sigh */
 #  define D_INO(de) (de)->d_fileno
 #  define D_NAMLEN(de) (de)->d_namlen
@@ -108,7 +108,7 @@
 #if HAVE_SENDFILE
 # if __linux
 #  include <sys/sendfile.h>
-# elif __freebsd || defined __APPLE__
+# elif __FreeBSD__ || defined __APPLE__
 #  include <sys/socket.h>
 #  include <sys/uio.h>
 # elif __hpux
@@ -911,7 +911,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 # if __linux
   res = sendfile (ofd, ifd, &offset, count);
 
-# elif __freebsd
+# elif __FreeBSD__
   /*
    * Of course, the freebsd sendfile is a dire hack with no thoughts
    * wasted on making it similar to other I/O functions.
@@ -920,7 +920,8 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
     off_t sbytes;
     res = sendfile (ifd, ofd, offset, count, 0, &sbytes, 0);
 
-    if (res < 0 && sbytes)
+    /* freebsd' sendfile will return 0 when success */
+    if (res == 0 && sbytes)
       /* maybe only on EAGAIN: as usual, the manpage leaves you guessing */
       res = sbytes;
   }
@@ -931,7 +932,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
     off_t sbytes = count;
     res = sendfile (ifd, ofd, offset, &sbytes, 0, 0);
 
-    if (res < 0 && errno == EAGAIN && sbytes)
+    if (res == 0 && errno == EAGAIN && sbytes)
       res = sbytes;
   }
 
