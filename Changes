@@ -22,4 +22,5 @@ TODO: maybe add mincore support? available on at least darwin, solaris, linux, f
         - also use sendfile emulation for ENOTSUP and EOPNOTSUPP
           error codes.
         - add OS-independent EIO_MT_* and EIO_MS_* flag enums.
+        - add eio_statvfs/eio_fstatvfs.
 
