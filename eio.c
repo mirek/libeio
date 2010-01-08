@@ -921,9 +921,10 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
     off_t sbytes;
     res = sendfile (ifd, ofd, offset, count, 0, &sbytes, 0);
 
-    /* freebsd' sendfile will return 0 when success */
-    if (res == 0 && sbytes)
-      /* maybe only on EAGAIN: as usual, the manpage leaves you guessing */
+    /* freebsd' sendfile will return 0 on success */
+    /* freebsd 8 documents it as only setting *sbytes on EINTR and EAGAIN, but */
+    /* not on e.g. EIO or EPIPE - sounds broken */
+    if ((res < 0 && (errno == EAGAIN || errno == EINTR) && sbytes) || res == 0)
       res = sbytes;
   }
 
@@ -933,7 +934,8 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
     off_t sbytes = count;
     res = sendfile (ifd, ofd, offset, &sbytes, 0, 0);
 
-    if (res == 0 && errno == EAGAIN && sbytes)
+    /* according to the manpage, sbytes is always valid */
+    if (sbytes)
       res = sbytes;
   }
 
