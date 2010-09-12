@@ -24,4 +24,5 @@ TODO: openbsd requites stdint.h for intptr_t - why posix?
           error codes.
         - add OS-independent EIO_MT_* and EIO_MS_* flag enums.
         - add eio_statvfs/eio_fstatvfs.
+        - add eio_mlock/eio_mlockall and OS-independent MCL_* flag enums.
 
