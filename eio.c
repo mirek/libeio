@@ -1437,7 +1437,7 @@ eio__mlock (void *addr, size_t length)
 {
   eio_page_align (&addr, &length);
 
-  mlock (addr, length);
+  return mlock (addr, length);
 }
 
 static int
@@ -1456,7 +1456,7 @@ eio__mlockall (int flags)
          | (flags & EIO_MCL_FUTURE  ? MCL_FUTURE : 0);
     }
 
-  mlockall (flags);
+  return mlockall (flags);
 }
 #endif
 
@@ -1693,13 +1693,13 @@ static void eio_execute (etp_worker *self, eio_req *req)
 
       case EIO_BUSY:
 #ifdef _WIN32
-	Sleep (req->nv1 * 1000.);
+	Sleep (req->nv1 * 1e3);
 #else
         {
           struct timeval tv;
 
           tv.tv_sec  = req->nv1;
-          tv.tv_usec = (req->nv1 - tv.tv_sec) * 1000000.;
+          tv.tv_usec = (req->nv1 - tv.tv_sec) * 1e6;
 
           req->result = select (0, 0, 0, 0, &tv);
         }
