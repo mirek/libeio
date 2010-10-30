@@ -1632,8 +1632,6 @@ static void eio_api_destroy (eio_req *req)
 
 static void eio_execute (etp_worker *self, eio_req *req)
 {
-  errno = 0;
-
   switch (req->type)
     {
       case EIO_READ:      ALLOC (req->size);
@@ -1724,7 +1722,6 @@ static void eio_execute (etp_worker *self, eio_req *req)
           else
             times = 0;
 
-
           req->result = req->type == EIO_FUTIME
                         ? futimes (req->int1, times)
                         : utimes  (req->ptr1, times);
@@ -1743,6 +1740,7 @@ static void eio_execute (etp_worker *self, eio_req *req)
         break;
 
       default:
+        errno = ENOSYS;
         req->result = -1;
         break;
     }

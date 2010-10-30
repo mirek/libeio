@@ -25,4 +25,6 @@ TODO: openbsd requites stdint.h for intptr_t - why posix?
         - add OS-independent EIO_MT_* and EIO_MS_* flag enums.
         - add eio_statvfs/eio_fstatvfs.
         - add eio_mlock/eio_mlockall and OS-independent MCL_* flag enums.
+        - no longer set errno to 0 before making syscalls, this only lures
+          people into the trap of believing errno shows success or failure.
 
