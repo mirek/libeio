@@ -12,7 +12,7 @@ AC_CACHE_CHECK(for futimes, ac_cv_futimes, [AC_LINK_IFELSE([[
 struct timeval tv[2];
 int res;
 int fd;
-int main(void)
+int main (void)
 {
    res = futimes (fd, tv);
    return 0;
@@ -22,7 +22,7 @@ test $ac_cv_futimes = yes && AC_DEFINE(HAVE_FUTIMES, 1, futimes(2) is available)
 
 AC_CACHE_CHECK(for readahead, ac_cv_readahead, [AC_LINK_IFELSE([
 #include <fcntl.h>
-int main(void)
+int main (void)
 {
    int fd = 0;
    size_t count = 2;
@@ -35,7 +35,7 @@ test $ac_cv_readahead = yes && AC_DEFINE(HAVE_READAHEAD, 1, readahead(2) is avai
 
 AC_CACHE_CHECK(for fdatasync, ac_cv_fdatasync, [AC_LINK_IFELSE([
 #include <unistd.h>
-int main(void)
+int main (void)
 {
    int fd = 0;
    fdatasync (fd);
@@ -46,7 +46,7 @@ test $ac_cv_fdatasync = yes && AC_DEFINE(HAVE_FDATASYNC, 1, fdatasync(2) is avai
 
 AC_CACHE_CHECK(for pread and pwrite, ac_cv_preadwrite, [AC_LINK_IFELSE([
 #include <unistd.h>
-int main(void)
+int main (void)
 {
    int fd = 0;
    size_t count = 1;
@@ -72,7 +72,7 @@ AC_CACHE_CHECK(for sendfile, ac_cv_sendfile, [AC_LINK_IFELSE([
 #else
 # error unsupported architecture
 #endif
-int main(void)
+int main (void)
 {
    int fd = 0;
    off_t offset = 1;
@@ -92,7 +92,7 @@ test $ac_cv_sendfile = yes && AC_DEFINE(HAVE_SENDFILE, 1, sendfile(2) is availab
 
 AC_CACHE_CHECK(for sync_file_range, ac_cv_sync_file_range, [AC_LINK_IFELSE([
 #include <fcntl.h>
-int main(void)
+int main (void)
 {
    int fd = 0;
    off64_t offset = 1;
