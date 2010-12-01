@@ -818,12 +818,10 @@ eio__pwrite (int fd, void *buf, size_t count, off_t offset)
 }
 #endif
 
-#ifndef HAVE_FUTIMES
+#ifndef HAVE_UTIMES
 
 # undef utimes
-# undef futimes
-# define utimes(path,times)  eio__utimes  (path, times)
-# define futimes(fd,times)   eio__futimes (fd, times)
+# define utimes(path,times)  eio__utimes (path, times)
 
 static int
 eio__utimes (const char *filename, const struct timeval times[2])
@@ -840,6 +838,13 @@ eio__utimes (const char *filename, const struct timeval times[2])
   else
     return utime (filename, 0);
 }
+
+#endif
+
+#ifndef HAVE_FUTIMES
+
+# undef futimes
+# define futimes(fd,times) eio__futimes (fd, times)
 
 static int eio__futimes (int fd, const struct timeval tv[2])
 {

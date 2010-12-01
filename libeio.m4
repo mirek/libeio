@@ -5,6 +5,20 @@ AC_SEARCH_LIBS(
    [AC_MSG_ERROR(pthread functions not found)]
 )
 
+AC_CACHE_CHECK(for utimes, ac_cv_utimes, [AC_LINK_IFELSE([[
+#include <sys/types.h>
+#include <sys/time.h>
+#include <utime.h>
+struct timeval tv[2];
+int res;
+int main (void)
+{
+   res = utimes ("/", tv);
+   return 0;
+}
+]],ac_cv_utimes=yes,ac_cv_utimes=no)])
+test $ac_cv_utimes = yes && AC_DEFINE(HAVE_UTIMES, 1, utimes(2) is available)
+
 AC_CACHE_CHECK(for futimes, ac_cv_futimes, [AC_LINK_IFELSE([[
 #include <sys/types.h>
 #include <sys/time.h>
