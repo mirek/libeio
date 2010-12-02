@@ -119,3 +119,38 @@ int main (void)
 ],ac_cv_sync_file_range=yes,ac_cv_sync_file_range=no)])
 test $ac_cv_sync_file_range = yes && AC_DEFINE(HAVE_SYNC_FILE_RANGE, 1, sync_file_range(2) is available)
 
+dnl #############################################################################
+dnl # these checks exist for the benefit of IO::AIO
+
+dnl at least uclibc defines _POSIX_ADVISORY_INFO without *any* of the required
+dnl functionality actually being present. ugh.
+AC_CACHE_CHECK(for posix_madvise, ac_cv_posix_madvise, [AC_LINK_IFELSE([
+#include <sys/mman.h>
+int main (void)
+{
+   int res = posix_madvise ((void *)0, (size_t)0, POSIX_MADV_NORMAL);
+   int a = POSIX_MADV_SEQUENTIAL;
+   int b = POSIX_MADV_RANDOM;
+   int c = POSIX_MADV_WILLNEED;
+   int d = POSIX_MADV_DONTNEED;
+   return 0;
+}
+],ac_cv_posix_madvise=yes,ac_cv_posix_madvise=no)])
+test $ac_cv_posix_madvise = yes && AC_DEFINE(HAVE_POSIX_MADVISE, 1, posix_madvise(2) is available)
+
+AC_CACHE_CHECK(for posix_fadvise, ac_cv_posix_fadvise, [AC_LINK_IFELSE([
+#define _XOPEN_SOURCE 600
+#include <fcntl.h>
+int main (void)
+{
+   int res = posix_fadvise ((int)0, (off_t)0, (off_t)0, POSIX_FADV_NORMAL);
+   int a = POSIX_FADV_SEQUENTIAL;
+   int b = POSIX_FADV_NOREUSE;
+   int c = POSIX_FADV_RANDOM;
+   int d = POSIX_FADV_WILLNEED;
+   int e = POSIX_FADV_DONTNEED;
+   return 0;
+}
+],ac_cv_posix_fadvise=yes,ac_cv_posix_fadvise=no)])
+test $ac_cv_posix_fadvise = yes && AC_DEFINE(HAVE_POSIX_FADVISE, 1, posix_fadvise(2) is available)
+
