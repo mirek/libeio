@@ -31,4 +31,5 @@ TODO: openbsd requites stdint.h for intptr_t - why posix?
         - suppoert utimes seperately from futimes, as some systems have
           utimes but not futimes.
         - use _POSIX_MEMLOCK_RANGE for mlock.
+        - do not (errornously) overwrite CFLAGS in configure.ac.
 
