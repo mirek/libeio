@@ -1,7 +1,8 @@
 Revision history for libeio
 
 TODO: maybe add mincore support? available on at least darwin, solaris, linux, freebsd
-TODO: openbsd requites stdint.h for intptr_t - why posix?
+TODO: openbsd requires stdint.h for intptr_t - why posix?
+TODO: mutex init in child after fork?
 
 1.0
         - readdir: correctly handle malloc failures.
