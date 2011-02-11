@@ -1,7 +1,7 @@
 /*
  * libeio API header
  *
- * Copyright (c) 2007,2008,2009,2010 Marc Alexander Lehmann <libeio@schmorp.de>
+ * Copyright (c) 2007,2008,2009,2010,2011 Marc Alexander Lehmann <libeio@schmorp.de>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modifica-
@@ -182,7 +182,7 @@ struct eio_req
   eio_req volatile *next; /* private ETP */
 
   ssize_t result;  /* result of syscall, e.g. result = read (... */
-  off_t offs;      /* read, write, truncate, readahead, sync_file_range: file offset */
+  off_t offs;      /* read, write, truncate, readahead, sync_file_range: file offset, mknod: dev_t */
   size_t size;     /* read, write, readahead, sendfile, msync, mlock, sync_file_range: length */
   void *ptr1;      /* all applicable requests: pathname, old name; readdir: optional eio_dirents */
   void *ptr2;      /* all applicable requests: new name or memory buffer; readdir: name strings */
@@ -192,7 +192,7 @@ struct eio_req
   int type;        /* EIO_xxx constant ETP */
   int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open, msync, mlockall, readdir: flags */
   long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode, sync_file_range: flags */
-  long int3;       /* chown, fchown: gid; mknod: dev_t */
+  long int3;       /* chown, fchown: gid */
   int errorno;     /* errno value on syscall return */
 
   unsigned char flags; /* private */

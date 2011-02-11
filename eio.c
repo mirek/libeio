@@ -1,7 +1,7 @@
 /*
  * libeio implementation
  *
- * Copyright (c) 2007,2008,2009,2010 Marc Alexander Lehmann <libeio@schmorp.de>
+ * Copyright (c) 2007,2008,2009,2010,2011 Marc Alexander Lehmann <libeio@schmorp.de>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modifica-
@@ -1683,7 +1683,7 @@ static void eio_execute (etp_worker *self, eio_req *req)
       case EIO_RENAME:    req->result = rename    (req->ptr1, req->ptr2); break;
       case EIO_LINK:      req->result = link      (req->ptr1, req->ptr2); break;
       case EIO_SYMLINK:   req->result = symlink   (req->ptr1, req->ptr2); break;
-      case EIO_MKNOD:     req->result = mknod     (req->ptr1, (mode_t)req->int2, (dev_t)req->int3); break;
+      case EIO_MKNOD:     req->result = mknod     (req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
 
       case EIO_READLINK:  ALLOC (PATH_MAX);
                           req->result = readlink  (req->ptr1, req->ptr2, PATH_MAX); break;
@@ -1943,7 +1943,7 @@ eio_req *eio_readdir (const char *path, int flags, int pri, eio_cb cb, void *dat
 
 eio_req *eio_mknod (const char *path, mode_t mode, dev_t dev, int pri, eio_cb cb, void *data)
 {
-  REQ (EIO_MKNOD); PATH; req->int2 = (long)mode; req->int3 = (long)dev; SEND;
+  REQ (EIO_MKNOD); PATH; req->int2 = (long)mode; req->offs = (off_t)dev; SEND;
 }
 
 static eio_req *

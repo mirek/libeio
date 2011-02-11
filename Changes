@@ -33,4 +33,5 @@ TODO: mutex init in child after fork?
           utimes but not futimes.
         - use _POSIX_MEMLOCK_RANGE for mlock.
         - do not (errornously) overwrite CFLAGS in configure.ac.
+        - mknod used int3 for dev_t (§2 bit), not offs (64 bit).
 
