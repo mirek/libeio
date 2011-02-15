@@ -2,9 +2,11 @@ Revision history for libeio
 
 TODO: maybe add mincore support? available on at least darwin, solaris, linux, freebsd
 TODO: openbsd requires stdint.h for intptr_t - why posix?
-TODO: mutex init in child after fork?
 
 1.0
+	- use nonstandard but maybe-working-on-bsd fork technique.
+	- support a max_idle value of 0.
+	- support setting of idle timeout value.
         - readdir: correctly handle malloc failures.
         - readdir: new flags argument, can return inode
           and possibly filetype, can sort in various ways.

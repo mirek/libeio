@@ -241,6 +241,7 @@ void eio_set_max_poll_reqs (unsigned int nreqs);
 void eio_set_min_parallel (unsigned int nthreads);
 void eio_set_max_parallel (unsigned int nthreads);
 void eio_set_max_idle     (unsigned int nthreads);
+void eio_set_idle_timeout (unsigned int seconds);
 
 unsigned int eio_nreqs    (void); /* number of requests in-flight */
 unsigned int eio_nready   (void); /* number of not-yet handled requests */

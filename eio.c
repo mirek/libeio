@@ -134,9 +134,6 @@
 # define D_NAMLEN(de) strlen ((de)->d_name)
 #endif
 
-/* number of seconds after which an idle threads exit */
-#define IDLE_TIMEOUT 10
-
 /* used for struct dirent, AIX doesn't provide it */
 #ifndef NAME_MAX
 # define NAME_MAX 4096
@@ -225,12 +222,13 @@ static unsigned int max_poll_reqs;     /* reslock */
 static volatile unsigned int nreqs;    /* reqlock */
 static volatile unsigned int nready;   /* reqlock */
 static volatile unsigned int npending; /* reqlock */
-static volatile unsigned int max_idle = 4;
+static volatile unsigned int max_idle = 4;      /* maximum number of threads that can idle indefinitely */
+static volatile unsigned int idle_timeout = 10; /* number of seconds after which an idle threads exit */
 
-static xmutex_t wrklock = X_MUTEX_INIT;
-static xmutex_t reslock = X_MUTEX_INIT;
-static xmutex_t reqlock = X_MUTEX_INIT;
-static xcond_t  reqwait = X_COND_INIT;
+static xmutex_t wrklock;
+static xmutex_t reslock;
+static xmutex_t reqlock;
+static xcond_t  reqwait;
 
 #if !HAVE_PREADWRITE
 /*
@@ -370,6 +368,14 @@ static ETP_REQ *reqq_shift (etp_reqq *q)
   abort ();
 }
 
+static void etp_thread_init (void)
+{
+  X_MUTEX_CREATE (wrklock);
+  X_MUTEX_CREATE (reslock);
+  X_MUTEX_CREATE (reqlock);
+  X_COND_CREATE  (reqwait);
+}
+
 static void etp_atfork_prepare (void)
 {
   X_LOCK (wrklock);
@@ -417,12 +423,13 @@ static void etp_atfork_child (void)
   nready   = 0;
   npending = 0;
 
-  etp_atfork_parent ();
+  etp_thread_init ();
 }
 
 static void
 etp_once_init (void)
-{    
+{
+  etp_thread_init ();
   X_THREAD_ATFORK (etp_atfork_prepare, etp_atfork_parent, etp_atfork_child);
 }
 
@@ -623,7 +630,14 @@ static void etp_set_max_poll_reqs (unsigned int maxreqs)
 static void etp_set_max_idle (unsigned int nthreads)
 {
   if (WORDACCESS_UNSAFE) X_LOCK   (reqlock);
-  max_idle = nthreads <= 0 ? 1 : nthreads;
+  max_idle = nthreads;
+  if (WORDACCESS_UNSAFE) X_UNLOCK (reqlock);
+}
+
+static void etp_set_idle_timeout (unsigned int seconds)
+{
+  if (WORDACCESS_UNSAFE) X_LOCK   (reqlock);
+  idle_timeout = seconds;
   if (WORDACCESS_UNSAFE) X_UNLOCK (reqlock);
 }
 
@@ -759,6 +773,11 @@ void eio_set_max_poll_reqs (unsigned int maxreqs)
 void eio_set_max_idle (unsigned int nthreads)
 {
   etp_set_max_idle (nthreads);
+}
+
+void eio_set_idle_timeout (unsigned int seconds)
+{
+  etp_set_idle_timeout (seconds);
 }
 
 void eio_set_min_parallel (unsigned int nthreads)
@@ -1553,7 +1572,7 @@ X_THREAD_PROC (etp_proc)
 
           ++idle;
 
-          ts.tv_sec = time (0) + IDLE_TIMEOUT;
+          ts.tv_sec = time (0) + idle_timeout;
           if (X_COND_TIMEDWAIT (reqwait, reqlock, ts) == ETIMEDOUT)
             {
               if (idle > max_idle)
