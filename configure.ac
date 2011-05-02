@@ -10,7 +10,7 @@ AC_PROG_LIBTOOL
 AC_PROG_CC
 
 if test "x$GCC" = xyes ; then
-  CFLAGS="$CFLAGS -O3"
+  CFLAGS="-O3 $CFLAGS"
 fi
 
 dnl somebody will forgive me
