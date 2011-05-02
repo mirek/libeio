@@ -13,8 +13,7 @@ if test "x$GCC" = xyes ; then
   CFLAGS="-O3 $CFLAGS"
 fi
 
-dnl somebody will forgive me
-CFLAGS="-D_GNU_SOURCE $CFLAGS"
+AC_GNU_SOURCE
 
 m4_include([libeio.m4])
 
