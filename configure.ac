@@ -5,6 +5,9 @@ AC_CONFIG_HEADERS([config.h])
 
 AM_INIT_AUTOMAKE(libeio,1.0)
 AM_MAINTAINER_MODE
+
+AC_GNU_SOURCE
+
 AC_PROG_LIBTOOL
 
 AC_PROG_CC
@@ -12,8 +15,6 @@ AC_PROG_CC
 if test "x$GCC" = xyes ; then
   CFLAGS="-O3 $CFLAGS"
 fi
-
-AC_GNU_SOURCE
 
 m4_include([libeio.m4])
 
