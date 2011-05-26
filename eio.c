@@ -1281,7 +1281,6 @@ eio__scandir (eio_req *req, etp_worker *self)
 
                   /* now partition dirs to the front, and non-dirs to the back */
                   /* by walking from both sides and swapping if necessary */
-                  /* also clear score, so it doesn't influence sorting */
                   while (oth > dir)
                     {
                       if (dir->type == EIO_DT_DIR)
@@ -1294,7 +1293,7 @@ eio__scandir (eio_req *req, etp_worker *self)
                         }
                     }
 
-                  /* now sort the dirs only */
+                  /* now sort the dirs only (dirs all have the same score) */
                   eio_dent_sort (dents, dir - dents, 0, inode_bits);
                 }
 
