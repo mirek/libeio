@@ -36,4 +36,5 @@ TODO: openbsd requires stdint.h for intptr_t - why posix?
         - use _POSIX_MEMLOCK_RANGE for mlock.
         - do not (errornously) overwrite CFLAGS in configure.ac.
         - mknod used int3 for dev_t (§2 bit), not offs (64 bit).
-
+        - fix memory corruption in eio_readdirx for the flags
+          combination EIO_READDIR_STAT_ORDER | EIO_READDIR_DIRS_FIRST.

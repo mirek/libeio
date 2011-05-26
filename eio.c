@@ -1062,8 +1062,10 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 static signed char
 eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 {
-    return a->score - b->score ? a->score - b->score /* works because our signed char is always 0..100 */
-              : a->inode < b->inode ? -1 : a->inode > b->inode ? 1 : 0;
+  return a->score - b->score ? a->score - b->score /* works because our signed char is always 0..100 */
+       : a->inode < b->inode ? -1
+       : a->inode > b->inode ?  1
+       :                        0;
 }
 
 #define EIO_DENT_CMP(i,op,j) eio_dent_cmp (&i, &j) op 0
@@ -1079,8 +1081,8 @@ eio_dent_radix_sort (eio_dirent *dents, int size, signed char score_bits, ino_t 
 
   assert (CHAR_BIT == 8);
   assert (sizeof (eio_dirent) * 8 < 256);
-  assert (offsetof (eio_dirent, inode)); /* we use 0 as sentinel */
-  assert (offsetof (eio_dirent, score)); /* we use 0 as sentinel */
+  assert (offsetof (eio_dirent, inode)); /* we use bit #0 as sentinel */
+  assert (offsetof (eio_dirent, score)); /* we use bit #0 as sentinel */
 
   if (size <= EIO_SORT_FAST)
     return;
@@ -1245,6 +1247,7 @@ eio__scandir (eio_req *req, etp_worker *self)
   X_LOCK (wrklock);
   /* the corresponding closedir is in ETP_WORKER_CLEAR */
   self->dirp = dirp = opendir (req->ptr1);
+
   req->flags |= EIO_FLAG_PTR1_FREE | EIO_FLAG_PTR2_FREE;
   req->ptr1 = dents = flags ? malloc (dentalloc * sizeof (eio_dirent)) : 0;
   req->ptr2 = names = malloc (namesalloc);
@@ -1266,7 +1269,7 @@ eio__scandir (eio_req *req, etp_worker *self)
             req->result = dentoffs;
 
             if (flags & EIO_READDIR_STAT_ORDER)
-              eio_dent_sort (dents, dentoffs, 0, inode_bits); /* sort by inode exclusively */
+              eio_dent_sort (dents, dentoffs, flags & EIO_READDIR_DIRS_FIRST ? 7 : 0, inode_bits);
             else if (flags & EIO_READDIR_DIRS_FIRST)
               if (flags & EIO_READDIR_FOUND_UNKNOWN)
                 eio_dent_sort (dents, dentoffs, 7, inode_bits); /* sort by score and inode */
