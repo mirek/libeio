@@ -1,5 +1,3 @@
-libtoolize
-aclocal
-automake --add-missing
-autoheader
-autoconf
+#!/bin/sh
+
+autoreconf --install --symlink --force
