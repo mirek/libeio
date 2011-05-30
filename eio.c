@@ -37,6 +37,10 @@
  * either the BSD or the GPL.
  */
 
+#ifndef _WIN32
+# include "config.h"
+#endif
+
 #include "eio.h"
 
 #ifdef EIO_STACKSIZE
@@ -73,7 +77,6 @@
   /*doh*/
 #else
 
-# include "config.h"
 # include <sys/time.h>
 # include <sys/select.h>
 # include <unistd.h>
