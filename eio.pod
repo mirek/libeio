@@ -13,14 +13,14 @@ web page you might find easier to navigate when reading it for the first
 time: L<http://pod.tst.eu/http://cvs.schmorp.de/libeio/eio.pod>.
 
 Note that this library is a by-product of the C<IO::AIO> perl
-module, and many of the subtler points regarding requets lifetime
+module, and many of the subtler points regarding requests lifetime
 and so on are only documented in its documentation at the
 moment: L<http://pod.tst.eu/http://cvs.schmorp.de/IO-AIO/AIO.pm>.
 
 =head2 FEATURES
 
 This library provides fully asynchronous versions of most POSIX functions
-dealign with I/O. Unlike most asynchronous libraries, this not only
+dealing with I/O. Unlike most asynchronous libraries, this not only
 includes C<read> and C<write>, but also C<open>, C<stat>, C<unlink> and
 similar functions, as well as less rarely ones such as C<mknod>, C<futime>
 or C<readlink>.
@@ -39,7 +39,7 @@ C<readdir>.
 Libeio represents time as a single floating point number, representing the
 (fractional) number of seconds since the (POSIX) epoch (somewhere near
 the beginning of 1970, details are complicated, don't ask). This type is
-called C<eio_tstamp>, but it is guarenteed to be of type C<double> (or
+called C<eio_tstamp>, but it is guaranteed to be of type C<double> (or
 better), so you can freely use C<double> yourself.
 
 Unlike the name component C<stamp> might indicate, it is also used for
@@ -99,7 +99,7 @@ handled or C<done_poll> has been called, which signals the same.
 Note that C<eio_poll> might return after C<done_poll> and C<want_poll>
 have been called again, so watch out for races in your code.
 
-As with C<want_poll>, this callback is called while lcoks are being held,
+As with C<want_poll>, this callback is called while locks are being held,
 so you I<must not call any libeio functions form within this callback>.
 
 =item int eio_poll ()
@@ -128,7 +128,7 @@ and therefore, before calling C<eio_poll>. This might result in (some)
 spurious wake-ups, but is generally harmless.
 
 For most other event loops, you would typically use a pipe - the event
-loop should be told to wait for read readyness on the read end. In
+loop should be told to wait for read readiness on the read end. In
 C<want_poll> you would write a single byte, in C<done_poll> you would try
 to read that byte, and in the callback for the read end, you would call
 C<eio_poll>. The race is avoided here because the event loop should invoke
@@ -187,7 +187,7 @@ Set the maximum number of threads that libeio will spawn.
 Libeio uses threads internally to handle most requests, and will start and stop threads on demand.
 
 This call can be used to limit the number of idle threads (threads without
-work to do): libeio will keep some threads idle in preperation for more
+work to do): libeio will keep some threads idle in preparation for more
 requests, but never longer than C<nthreads> threads.
 
 In addition to this, libeio will also stop threads when they are idle for
