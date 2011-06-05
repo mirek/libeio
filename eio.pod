@@ -228,13 +228,12 @@ custom data value as C<data>.
 =head3 POSIX API WRAPPERS
 
 These requests simply wrap the POSIX call of the same name, with the same
-arguments:
+arguments. If a function is not implemented by the OS and cnanot be emulated
+in some way, then all of these return C<-1> and set C<errorno> to C<ENOSYS>.
 
 =over 4
 
 =item eio_open      (const char *path, int flags, mode_t mode, int pri, eio_cb cb, void *data)
-
-=item eio_utime     (const char *path, eio_tstamp atime, eio_tstamp mtime, int pri, eio_cb cb, void *data)
 
 =item eio_truncate  (const char *path, off_t offset, int pri, eio_cb cb, void *data)
 
@@ -248,13 +247,7 @@ arguments:
 
 =item eio_unlink    (const char *path, int pri, eio_cb cb, void *data)
 
-=item eio_readlink  (const char *path, int pri, eio_cb cb, void *data) /* result=ptr2 allocated dynamically */
-
-=item eio_stat      (const char *path, int pri, eio_cb cb, void *data) /* stat buffer=ptr2 allocated dynamically */
-
-=item eio_lstat     (const char *path, int pri, eio_cb cb, void *data) /* stat buffer=ptr2 allocated dynamically */
-
-=item eio_statvfs   (const char *path, int pri, eio_cb cb, void *data) /* stat buffer=ptr2 allocated dynamically */
+=item eio_utime     (const char *path, eio_tstamp atime, eio_tstamp mtime, int pri, eio_cb cb, void *data)
 
 =item eio_mknod     (const char *path, mode_t mode, dev_t dev, int pri, eio_cb cb, void *data)
 
@@ -264,11 +257,7 @@ arguments:
 
 =item eio_rename    (const char *path, const char *new_path, int pri, eio_cb cb, void *data)
 
-=item eio_msync     (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data)
-
 =item eio_mlock     (void *addr, size_t length, int pri, eio_cb cb, void *data)
-
-=item eio_mlockall  (int flags, int pri, eio_cb cb, void *data)
 
 =item eio_close     (int fd, int pri, eio_cb cb, void *data)
 
@@ -307,6 +296,33 @@ Not surprisingly, pread and pwrite are not thread-safe on Darwin (OS/X),
 so it is advised not to submit multiple requests on the same fd on this
 horrible pile of garbage.
 
+=item eio_mlockall  (int flags, int pri, eio_cb cb, void *data)
+
+Like C<mlockall>, but the flag value constants are called
+C<EIO_MCL_CURRENT> and C<EIO_MCL_FUTURE>.
+
+=item eio_msync     (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data)
+
+Just like msync, except that the flag values are called C<EIO_MS_ASYNC>,
+C<EIO_MS_INVALIDATE> and C<EIO_MS_SYNC>.
+
+=item eio_readlink  (const char *path, int pri, eio_cb cb, void *data)
+
+If successful, the path read by C<readlink(2)> can be accessed via C<<
+req->ptr2 >> and is I<NOT> null-terminated, with the length specified as
+C<< req->result >>.
+
+  if (req->result >= 0)
+    {
+      char *target = strndup ((char *)req->ptr2, req->result);
+
+      free (target);
+    }
+
+=item eio_stat      (const char *path, int pri, eio_cb cb, void *data)
+
+=item eio_lstat     (const char *path, int pri, eio_cb cb, void *data)
+
 =item eio_fstat     (int fd, int pri, eio_cb cb, void *data)
    
 Stats a file - if C<< req->result >> indicates success, then you can
@@ -314,7 +330,9 @@ access the C<struct stat>-like structure via C<< req->ptr2 >>:
 
    EIO_STRUCT_STAT *statdata = (EIO_STRUCT_STAT *)req->ptr2;
 
-=item eio_fstatvfs  (int fd, int pri, eio_cb cb, void *data) /* stat buffer=ptr2 allocated dynamically */
+=item eio_statvfs   (const char *path, int pri, eio_cb cb, void *data)
+
+=item eio_fstatvfs  (int fd, int pri, eio_cb cb, void *data)
 
 Stats a filesystem - if C<< req->result >> indicates success, then you can
 access the C<struct statvfs>-like structure via C<< req->ptr2 >>:
@@ -340,7 +358,7 @@ the names or an array of C<struct eio_dirent>, depending on the C<flags>
 argument.
 
 The C<< req->result >> indicates either the number of files found, or
-C<-1> on error. On success, zero-terminated names can be found as C<< req->ptr2 >>,
+C<-1> on error. On success, null-terminated names can be found as C<< req->ptr2 >>,
 and C<struct eio_dirents>, if requested by C<flags>, can be found via C<<
 req->ptr1 >>.
 
@@ -481,6 +499,9 @@ emulated by simply reading the data (currently in 64kiB chunks).
 
 Calls C<sync_file_range>. If the syscall is missing, then this is the same
 as calling C<fdatasync>.
+
+Flags can be any combination of C<EIO_SYNC_FILE_RANGE_WAIT_BEFORE>,
+C<EIO_SYNC_FILE_RANGE_WRITE> and C<EIO_SYNC_FILE_RANGE_WAIT_AFTER>.
 
 =back
 
