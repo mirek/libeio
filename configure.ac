@@ -13,7 +13,7 @@ AC_PROG_LIBTOOL
 AC_PROG_CC
 
 if test "x$GCC" = xyes ; then
-  CFLAGS="-O3 $CFLAGS"
+  CFLAGS="$OPTIMIZE -O3 $CFLAGS"
 fi
 
 m4_include([libeio.m4])

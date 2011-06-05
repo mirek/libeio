@@ -1,3 +1,7 @@
+dnl openbsd in it's neverending brokenness requires stdint.h for intptr_t,
+dnl but that header isn't very portable...
+AC_CHECK_HEADERS([stdint.h])
+
 AC_SEARCH_LIBS(
    pthread_create,
    [pthread pthreads pthreadVC2],

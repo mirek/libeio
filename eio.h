@@ -200,7 +200,7 @@ struct eio_req
 
   void *data;
   eio_cb finish;
-  void (*destroy)(eio_req *req); /* called when requets no longer needed */
+  void (*destroy)(eio_req *req); /* called when request no longer needed */
   void (*feed)(eio_req *req);    /* only used for group requests */
 
   EIO_REQ_MEMBERS

@@ -60,6 +60,12 @@
 #include <fcntl.h>
 #include <assert.h>
 
+/* intptr_t comes from unistd.h, says POSIX/UNIX/tradition */
+/* intptr_t only comes form stdint.h, says idiot openbsd coder */
+#if HAVE_STDINT_H
+# include <stdint.h>
+#endif
+
 #ifndef EIO_FINISH
 # define EIO_FINISH(req)  ((req)->finish) && !EIO_CANCELLED (req) ? (req)->finish (req) : 0
 #endif
