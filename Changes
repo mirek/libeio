@@ -41,3 +41,4 @@ TODO: fadvise request
         - fix memory corruption in eio_readdirx for the flags
           combination EIO_READDIR_STAT_ORDER | EIO_READDIR_DIRS_FIRST.
         - port to openbsd (another blatantly broken non-UNIX/POSIX platform).
+        - fix eio_custom prototype.

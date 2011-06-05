@@ -1780,7 +1780,7 @@ static void eio_execute (etp_worker *self, eio_req *req)
         break;
 
       case EIO_CUSTOM:
-        ((void (*)(eio_req *))req->feed) (req);
+        req->feed (req);
         break;
 
       default:
@@ -2011,9 +2011,9 @@ eio_req *eio_rename (const char *path, const char *new_path, int pri, eio_cb cb,
   return eio__2path (EIO_RENAME, path, new_path, pri, cb, data);
 }
 
-eio_req *eio_custom (eio_cb execute, int pri, eio_cb cb, void *data)
+eio_req *eio_custom (void (*)(eio_req *) execute, int pri, eio_cb cb, void *data);
 {
-  REQ (EIO_CUSTOM); req->feed = (void (*)(eio_req *))execute; SEND;
+  REQ (EIO_CUSTOM); req->feed = execute; SEND;
 }
 
 #endif

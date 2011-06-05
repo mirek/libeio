@@ -249,7 +249,7 @@ unsigned int eio_npending (void); /* numbe rof finished but unhandled requests *
 unsigned int eio_nthreads (void); /* number of worker threads in use currently */
 
 /*****************************************************************************/
-/* convinience wrappers */
+/* convenience wrappers */
 
 #ifndef EIO_NO_WRAPPERS
 eio_req *eio_nop       (int pri, eio_cb cb, void *data); /* does nothing except go through the whole process */
@@ -291,7 +291,7 @@ eio_req *eio_mknod     (const char *path, mode_t mode, dev_t dev, int pri, eio_c
 eio_req *eio_link      (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_symlink   (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_rename    (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
-eio_req *eio_custom    (eio_cb execute, int pri, eio_cb cb, void *data);
+eio_req *eio_custom    (void (*)(eio_req *) execute, int pri, eio_cb cb, void *data);
 #endif
 
 /*****************************************************************************/

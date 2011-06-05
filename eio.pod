@@ -140,87 +140,6 @@ C<eio_poll>. The race is avoided here because the event loop should invoke
 your callback again and again until the byte has been read (as the pipe
 read callback does not read it, only C<done_poll>).
 
-=head2 CONFIGURATION
-
-The functions in this section can sometimes be useful, but the default
-configuration will do in most case, so you should skip this section on
-first reading.
-
-=over 4
-
-=item eio_set_max_poll_time (eio_tstamp nseconds)
-
-This causes C<eio_poll ()> to return after it has detected that it was
-running for C<nsecond> seconds or longer (this number can be fractional).
-
-This can be used to limit the amount of time spent handling eio requests,
-for example, in interactive programs, you might want to limit this time to
-C<0.01> seconds or so.
-
-Note that:
-
-a) libeio doesn't know how long your request callbacks take, so the time
-spent in C<eio_poll> is up to one callback invocation longer then this
-interval.
-
-b) this is implemented by calling C<gettimeofday> after each request,
-which can be costly.
-
-c) at least one request will be handled.
-
-=item eio_set_max_poll_reqs (unsigned int nreqs)
-
-When C<nreqs> is non-zero, then C<eio_poll> will not handle more than
-C<nreqs> requests per invocation. This is a less costly way to limit the
-amount of work done by C<eio_poll> then setting a time limit.
-
-If you know your callbacks are generally fast, you could use this to
-encourage interactiveness in your programs by setting it to C<10>, C<100>
-or even C<1000>.
-
-=item eio_set_min_parallel (unsigned int nthreads)
-
-Make sure libeio can handle at least this many requests in parallel. It
-might be able handle more.
-
-=item eio_set_max_parallel (unsigned int nthreads)
-
-Set the maximum number of threads that libeio will spawn.
-
-=item eio_set_max_idle (unsigned int nthreads)
-
-Libeio uses threads internally to handle most requests, and will start and stop threads on demand.
-
-This call can be used to limit the number of idle threads (threads without
-work to do): libeio will keep some threads idle in preparation for more
-requests, but never longer than C<nthreads> threads.
-
-In addition to this, libeio will also stop threads when they are idle for
-a few seconds, regardless of this setting.
-
-=item unsigned int eio_nthreads ()
-
-Return the number of worker threads currently running.
-
-=item unsigned int eio_nreqs ()
-
-Return the number of requests currently handled by libeio. This is the
-total number of requests that have been submitted to libeio, but not yet
-destroyed.
-
-=item unsigned int eio_nready ()
-
-Returns the number of ready requests, i.e. requests that have been
-submitted but have not yet entered the execution phase.
-
-=item unsigned int eio_npending ()
-
-Returns the number of pending requests, i.e. requests that have been
-executed and have results, but have not been finished yet by a call to
-C<eio_poll>).
-
-=back
-
 
 =head1 HIGH LEVEL REQUEST API
 
@@ -661,6 +580,87 @@ C<eio_req> structure for you - it merely uses it.
 zero
 
 #TODO
+
+=head2 CONFIGURATION
+
+The functions in this section can sometimes be useful, but the default
+configuration will do in most case, so you should skip this section on
+first reading.
+
+=over 4
+
+=item eio_set_max_poll_time (eio_tstamp nseconds)
+
+This causes C<eio_poll ()> to return after it has detected that it was
+running for C<nsecond> seconds or longer (this number can be fractional).
+
+This can be used to limit the amount of time spent handling eio requests,
+for example, in interactive programs, you might want to limit this time to
+C<0.01> seconds or so.
+
+Note that:
+
+a) libeio doesn't know how long your request callbacks take, so the time
+spent in C<eio_poll> is up to one callback invocation longer then this
+interval.
+
+b) this is implemented by calling C<gettimeofday> after each request,
+which can be costly.
+
+c) at least one request will be handled.
+
+=item eio_set_max_poll_reqs (unsigned int nreqs)
+
+When C<nreqs> is non-zero, then C<eio_poll> will not handle more than
+C<nreqs> requests per invocation. This is a less costly way to limit the
+amount of work done by C<eio_poll> then setting a time limit.
+
+If you know your callbacks are generally fast, you could use this to
+encourage interactiveness in your programs by setting it to C<10>, C<100>
+or even C<1000>.
+
+=item eio_set_min_parallel (unsigned int nthreads)
+
+Make sure libeio can handle at least this many requests in parallel. It
+might be able handle more.
+
+=item eio_set_max_parallel (unsigned int nthreads)
+
+Set the maximum number of threads that libeio will spawn.
+
+=item eio_set_max_idle (unsigned int nthreads)
+
+Libeio uses threads internally to handle most requests, and will start and stop threads on demand.
+
+This call can be used to limit the number of idle threads (threads without
+work to do): libeio will keep some threads idle in preparation for more
+requests, but never longer than C<nthreads> threads.
+
+In addition to this, libeio will also stop threads when they are idle for
+a few seconds, regardless of this setting.
+
+=item unsigned int eio_nthreads ()
+
+Return the number of worker threads currently running.
+
+=item unsigned int eio_nreqs ()
+
+Return the number of requests currently handled by libeio. This is the
+total number of requests that have been submitted to libeio, but not yet
+destroyed.
+
+=item unsigned int eio_nready ()
+
+Returns the number of ready requests, i.e. requests that have been
+submitted but have not yet entered the execution phase.
+
+=item unsigned int eio_npending ()
+
+Returns the number of pending requests, i.e. requests that have been
+executed and have results, but have not been finished yet by a call to
+C<eio_poll>).
+
+=back
 
 =head1 EMBEDDING
 
