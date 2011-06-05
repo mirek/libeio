@@ -490,9 +490,17 @@ These requests are specific to libeio and do not correspond to any OS call.
 
 =over 4
 
-=item eio_mtouch    (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data)
+=item eio_mtouch (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data)
 
-=item eio_custom    (void (*)(eio_req *) execute, int pri, eio_cb cb, void *data)
+Reads (C<flags == 0>) or modifies (C<flags == EIO_MT_MODIFY) the given
+memory area, page-wise, that is, it reads (or reads and writes back) the
+first octet of every page that spans the memory area.
+
+This can be used to page in some mmapped file, or dirty some pages. Note
+that dirtying is an unlocked read-write access, so races can ensue when
+the some other thread modifies the data stored in that memory area.
+
+=item eio_custom (void (*)(eio_req *) execute, int pri, eio_cb cb, void *data)
 
 Executes a custom request, i.e., a user-specified callback.
 
@@ -522,7 +530,7 @@ API.
 
   eio_custom (my_open, 0, my_open_done, "/etc/passwd");
 
-=item eio_busy      (eio_tstamp delay, int pri, eio_cb cb, void *data)
+=item eio_busy (eio_tstamp delay, int pri, eio_cb cb, void *data)
 
 This is a a request that takes C<delay> seconds to execute, but otherwise
 does nothing - it simply puts one of the worker threads to sleep for this
@@ -531,7 +539,7 @@ long.
 This request can be used to artificially increase load, e.g. for debugging
 or benchmarking reasons.
 
-=item eio_nop       (int pri, eio_cb cb, void *data)
+=item eio_nop (int pri, eio_cb cb, void *data)
    
 This request does nothing, except go through the whole request cycle. This
 can be used to measure latency or in some cases to simplify code, but is
