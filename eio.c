@@ -1525,8 +1525,12 @@ eio__msync (void *mem, size_t len, int flags)
 #endif
 
 int
-eio__mtouch (void *mem, size_t len, int flags)
+eio__mtouch (eio_req *req)
 {
+  void *mem  = req->ptr2;
+  size_t len = req->size;
+  int flags  = req->int1;
+
   eio_page_align (&mem, &len);
 
   {
@@ -1536,9 +1540,9 @@ eio__mtouch (void *mem, size_t len, int flags)
 
     if (addr < end)
       if (flags & EIO_MT_MODIFY) /* modify */
-        do { *((volatile sig_atomic_t *)addr) |= 0; } while ((addr += page) < len);
+        do { *((volatile sig_atomic_t *)addr) |= 0; } while ((addr += page) < len && !EIO_CANCELLED (req));
       else
-        do { *((volatile sig_atomic_t *)addr)     ; } while ((addr += page) < len);
+        do { *((volatile sig_atomic_t *)addr)     ; } while ((addr += page) < len && !EIO_CANCELLED (req));
   }
 
   return 0;
@@ -1722,7 +1726,7 @@ static void eio_execute (etp_worker *self, eio_req *req)
       case EIO_FSYNC:     req->result = fsync     (req->int1); break;
       case EIO_FDATASYNC: req->result = fdatasync (req->int1); break;
       case EIO_MSYNC:     req->result = eio__msync (req->ptr2, req->size, req->int1); break;
-      case EIO_MTOUCH:    req->result = eio__mtouch (req->ptr2, req->size, req->int1); break;
+      case EIO_MTOUCH:    req->result = eio__mtouch (req); break;
       case EIO_MLOCK:     req->result = eio__mlock (req->ptr2, req->size); break;
       case EIO_MLOCKALL:  req->result = eio__mlockall (req->int1); break;
       case EIO_SYNC_FILE_RANGE: req->result = eio__sync_file_range (req->int1, req->offs, req->size, req->int2); break;
