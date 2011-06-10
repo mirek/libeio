@@ -1006,6 +1006,9 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 
 #elif defined (_WIN32)
       /* does not work, just for documentation of what would need to be done */
+      /* actually, cannot be done like this, as TransmitFile changes the file offset, */
+      /* libeio guarantees that the file offset does not change, and windows */
+      /* has no way to get an independent handle to the same file description */
       HANDLE h = TO_SOCKET (ifd);
       SetFilePointer (h, offset, 0, FILE_BEGIN);
       res = TransmitFile (TO_SOCKET (ofd), h, count, 0, 0, 0, 0);

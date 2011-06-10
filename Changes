@@ -42,3 +42,6 @@ TODO: fadvise request
           combination EIO_READDIR_STAT_ORDER | EIO_READDIR_DIRS_FIRST.
         - port to openbsd (another blatantly broken non-UNIX/POSIX platform).
         - fix eio_custom prototype.
+        - work around a Linux (and likely FreeBSD and other kernels) bug
+          where sendfile would not transfer all the requested bytes on
+          large transfers, using a heuristic.
