@@ -944,84 +944,101 @@ eio__readahead (int fd, off_t offset, size_t count, etp_worker *self)
 static ssize_t
 eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 {
+  ssize_t written = 0;
   ssize_t res;
 
   if (!count)
     return 0;
 
+  for (;;)
+    {
 #if HAVE_SENDFILE
 # if __linux
-  res = sendfile (ofd, ifd, &offset, count);
+      off_t soffset = offset;
+      res = sendfile (ofd, ifd, &soffset, count);
 
 # elif __FreeBSD__
-  /*
-   * Of course, the freebsd sendfile is a dire hack with no thoughts
-   * wasted on making it similar to other I/O functions.
-   */
-  {
-    off_t sbytes;
-    res = sendfile (ifd, ofd, offset, count, 0, &sbytes, 0);
+      /*
+       * Of course, the freebsd sendfile is a dire hack with no thoughts
+       * wasted on making it similar to other I/O functions.
+       */
+      off_t sbytes;
+      res = sendfile (ifd, ofd, offset, count, 0, &sbytes, 0);
 
-    #if 0 /* according to the manpage, this is correct, but broken behaviour */
-    /* freebsd' sendfile will return 0 on success */
-    /* freebsd 8 documents it as only setting *sbytes on EINTR and EAGAIN, but */
-    /* not on e.g. EIO or EPIPE - sounds broken */
-    if ((res < 0 && (errno == EAGAIN || errno == EINTR) && sbytes) || res == 0)
-      res = sbytes;
-    #endif
+      #if 0 /* according to the manpage, this is correct, but broken behaviour */
+      /* freebsd' sendfile will return 0 on success */
+      /* freebsd 8 documents it as only setting *sbytes on EINTR and EAGAIN, but */
+      /* not on e.g. EIO or EPIPE - sounds broken */
+      if ((res < 0 && (errno == EAGAIN || errno == EINTR) && sbytes) || res == 0)
+        res = sbytes;
+      #endif
 
-    /* according to source inspection, this is correct, and useful behaviour */
-    if (sbytes)
-      res = sbytes;
-  }
+      /* according to source inspection, this is correct, and useful behaviour */
+      if (sbytes)
+        res = sbytes;
 
 # elif defined (__APPLE__)
+      off_t sbytes = count;
+      res = sendfile (ifd, ofd, offset, &sbytes, 0, 0);
 
-  {
-    off_t sbytes = count;
-    res = sendfile (ifd, ofd, offset, &sbytes, 0, 0);
-
-    /* according to the manpage, sbytes is always valid */
-    if (sbytes)
-      res = sbytes;
-  }
+      /* according to the manpage, sbytes is always valid */
+      if (sbytes)
+        res = sbytes;
 
 # elif __hpux
-  res = sendfile (ofd, ifd, offset, count, 0, 0);
+      res = sendfile (ofd, ifd, offset, count, 0, 0);
 
 # elif __solaris
-  {
-    struct sendfilevec vec;
-    size_t sbytes;
+      struct sendfilevec vec;
+      size_t sbytes;
 
-    vec.sfv_fd   = ifd;
-    vec.sfv_flag = 0;
-    vec.sfv_off  = offset;
-    vec.sfv_len  = count;
+      vec.sfv_fd   = ifd;
+      vec.sfv_flag = 0;
+      vec.sfv_off  = offset;
+      vec.sfv_len  = count;
 
-    res = sendfilev (ofd, &vec, 1, &sbytes);
+      res = sendfilev (ofd, &vec, 1, &sbytes);
 
-    if (res < 0 && sbytes)
-      res = sbytes;
-  }
+      if (res < 0 && sbytes)
+        res = sbytes;
 
 # endif
 
 #elif defined (_WIN32)
-
-  /* does not work, just for documentation of what would need to be done */
-  {
-    HANDLE h = TO_SOCKET (ifd);
-    SetFilePointer (h, offset, 0, FILE_BEGIN);
-    res = TransmitFile (TO_SOCKET (ofd), h, count, 0, 0, 0, 0);
-  }
+      /* does not work, just for documentation of what would need to be done */
+      HANDLE h = TO_SOCKET (ifd);
+      SetFilePointer (h, offset, 0, FILE_BEGIN);
+      res = TransmitFile (TO_SOCKET (ofd), h, count, 0, 0, 0, 0);
 
 #else
-  res = -1;
-  errno = ENOSYS;
+      res = -1;
+      errno = ENOSYS;
 #endif
 
-  if (res <  0
+      /* we assume sendfile can copy at least 128mb in one go */
+      if (res <= 128 * 1024 * 1024)
+        {
+          if (res > 0)
+            written += res;
+
+          if (written)
+            return written;
+
+          break;
+        }
+      else
+        {
+          /* if we requested more, then probably the kernel was lazy */
+          written += res;
+          offset  += res;
+          count   -= res;
+
+          if (!count)
+            return written;
+        }
+    }
+
+  if (res < 0
       && (errno == ENOSYS || errno == EINVAL || errno == ENOTSOCK
           /* BSDs */
 #ifdef ENOTSUP /* sigh, if the steenking pile called openbsd would only try to at least compile posix code... */
