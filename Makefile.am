@@ -6,7 +6,7 @@ EXTRA_DIST = LICENSE Changes autogen.sh
 
 #man_MANS = ev.3
 
-include_HEADERS = eio.h
+include_HEADERS = eio.h ecb.h
 
 lib_LTLIBRARIES = libeio.la
 

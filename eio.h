@@ -291,7 +291,7 @@ eio_req *eio_mknod     (const char *path, mode_t mode, dev_t dev, int pri, eio_c
 eio_req *eio_link      (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_symlink   (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
 eio_req *eio_rename    (const char *path, const char *new_path, int pri, eio_cb cb, void *data);
-eio_req *eio_custom    (void (*)(eio_req *) execute, int pri, eio_cb cb, void *data);
+eio_req *eio_custom    (void (*execute)(eio_req *), int pri, eio_cb cb, void *data);
 #endif
 
 /*****************************************************************************/

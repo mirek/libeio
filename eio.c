@@ -2031,7 +2031,7 @@ eio_req *eio_rename (const char *path, const char *new_path, int pri, eio_cb cb,
   return eio__2path (EIO_RENAME, path, new_path, pri, cb, data);
 }
 
-eio_req *eio_custom (void (*)(eio_req *) execute, int pri, eio_cb cb, void *data);
+eio_req *eio_custom (void (*execute)(eio_req *), int pri, eio_cb cb, void *data)
 {
   REQ (EIO_CUSTOM); req->feed = execute; SEND;
 }
