@@ -42,6 +42,7 @@
 #endif
 
 #include "eio.h"
+#include "ecb.h"
 
 #ifdef EIO_STACKSIZE
 # define XTHREAD_STACKSIZE EIO_STACKSIZE
@@ -167,19 +168,6 @@
 
 #define EIO_TICKS ((1000000 + 1023) >> 10)
 
-/*****************************************************************************/
-
-#if __GNUC__ >= 3
-# define expect(expr,value) __builtin_expect ((expr),(value))
-#else
-# define expect(expr,value) (expr)
-#endif
-
-#define expect_false(expr) expect ((expr) != 0, 0)
-#define expect_true(expr)  expect ((expr) != 0, 1)
-
-/*****************************************************************************/
-
 #define ETP_PRI_MIN EIO_PRI_MIN
 #define ETP_PRI_MAX EIO_PRI_MAX
 
@@ -214,7 +202,8 @@ static void eio_execute (struct etp_worker *self, eio_req *req);
 #define ETP_NUM_PRI (ETP_PRI_MAX - ETP_PRI_MIN + 1)
 
 /* calculate time difference in ~1/EIO_TICKS of a second */
-static int tvdiff (struct timeval *tv1, struct timeval *tv2)
+ECB_INLINE int
+tvdiff (struct timeval *tv1, struct timeval *tv2)
 {
   return  (tv2->tv_sec  - tv1->tv_sec ) * EIO_TICKS
        + ((tv2->tv_usec - tv1->tv_usec) >> 10);
@@ -268,12 +257,14 @@ static etp_worker wrk_first = { &wrk_first, &wrk_first, 0 }; /* NOT etp */
 
 /* worker threads management */
 
-static void etp_worker_clear (etp_worker *wrk)
+static void ecb_cold
+etp_worker_clear (etp_worker *wrk)
 {
   ETP_WORKER_CLEAR (wrk);
 }
 
-static void etp_worker_free (etp_worker *wrk)
+static void ecb_cold
+etp_worker_free (etp_worker *wrk)
 {
   wrk->next->prev = wrk->prev;
   wrk->prev->next = wrk->next;
@@ -281,7 +272,8 @@ static void etp_worker_free (etp_worker *wrk)
   free (wrk);
 }
 
-static unsigned int etp_nreqs (void)
+static unsigned int
+etp_nreqs (void)
 {
   int retval;
   if (WORDACCESS_UNSAFE) X_LOCK   (reqlock);
@@ -290,7 +282,8 @@ static unsigned int etp_nreqs (void)
   return retval;
 }
 
-static unsigned int etp_nready (void)
+static unsigned int
+etp_nready (void)
 {
   unsigned int retval;
 
@@ -301,7 +294,8 @@ static unsigned int etp_nready (void)
   return retval;
 }
 
-static unsigned int etp_npending (void)
+static unsigned int
+etp_npending (void)
 {
   unsigned int retval;
 
@@ -312,7 +306,8 @@ static unsigned int etp_npending (void)
   return retval;
 }
 
-static unsigned int etp_nthreads (void)
+static unsigned int
+etp_nthreads (void)
 {
   unsigned int retval;
 
@@ -336,7 +331,8 @@ typedef struct {
 static etp_reqq req_queue;
 static etp_reqq res_queue;
 
-static int reqq_push (etp_reqq *q, ETP_REQ *req)
+static int ecb_noinline
+reqq_push (etp_reqq *q, ETP_REQ *req)
 {
   int pri = req->pri;
   req->next = 0;
@@ -352,7 +348,8 @@ static int reqq_push (etp_reqq *q, ETP_REQ *req)
   return q->size++;
 }
 
-static ETP_REQ *reqq_shift (etp_reqq *q)
+static ETP_REQ * ecb_noinline
+reqq_shift (etp_reqq *q)
 {
   int pri;
 
@@ -377,7 +374,8 @@ static ETP_REQ *reqq_shift (etp_reqq *q)
   abort ();
 }
 
-static void etp_thread_init (void)
+static void ecb_cold
+etp_thread_init (void)
 {
   X_MUTEX_CREATE (wrklock);
   X_MUTEX_CREATE (reslock);
@@ -385,7 +383,8 @@ static void etp_thread_init (void)
   X_COND_CREATE  (reqwait);
 }
 
-static void etp_atfork_prepare (void)
+static void ecb_cold
+etp_atfork_prepare (void)
 {
   X_LOCK (wrklock);
   X_LOCK (reqlock);
@@ -395,7 +394,8 @@ static void etp_atfork_prepare (void)
 #endif
 }
 
-static void etp_atfork_parent (void)
+static void ecb_cold
+etp_atfork_parent (void)
 {
 #if !HAVE_PREADWRITE
   X_UNLOCK (preadwritelock);
@@ -405,7 +405,8 @@ static void etp_atfork_parent (void)
   X_UNLOCK (wrklock);
 }
 
-static void etp_atfork_child (void)
+static void ecb_cold
+etp_atfork_child (void)
 {
   ETP_REQ *prv;
 
@@ -435,14 +436,14 @@ static void etp_atfork_child (void)
   etp_thread_init ();
 }
 
-static void
+static void ecb_cold
 etp_once_init (void)
 {
   etp_thread_init ();
   X_THREAD_ATFORK (etp_atfork_prepare, etp_atfork_parent, etp_atfork_child);
 }
 
-static int
+static int ecb_cold
 etp_init (void (*want_poll)(void), void (*done_poll)(void))
 {
   static pthread_once_t doinit = PTHREAD_ONCE_INIT;
@@ -457,7 +458,8 @@ etp_init (void (*want_poll)(void), void (*done_poll)(void))
 
 X_THREAD_PROC (etp_proc);
 
-static void etp_start_thread (void)
+static void ecb_cold
+etp_start_thread (void)
 {
   etp_worker *wrk = calloc (1, sizeof (etp_worker));
 
@@ -480,19 +482,21 @@ static void etp_start_thread (void)
   X_UNLOCK (wrklock);
 }
 
-static void etp_maybe_start_thread (void)
+static void
+etp_maybe_start_thread (void)
 {
-  if (expect_true (etp_nthreads () >= wanted))
+  if (ecb_expect_true (etp_nthreads () >= wanted))
     return;
   
   /* todo: maybe use idle here, but might be less exact */
-  if (expect_true (0 <= (int)etp_nthreads () + (int)etp_npending () - (int)etp_nreqs ()))
+  if (ecb_expect_true (0 <= (int)etp_nthreads () + (int)etp_npending () - (int)etp_nreqs ()))
     return;
 
   etp_start_thread ();
 }
 
-static void etp_end_thread (void)
+static void ecb_cold
+etp_end_thread (void)
 {
   eio_req *req = calloc (1, sizeof (eio_req));
 
@@ -509,7 +513,8 @@ static void etp_end_thread (void)
   X_UNLOCK (wrklock);
 }
 
-static int etp_poll (void)
+static int
+etp_poll (void)
 {
   unsigned int maxreqs;
   unsigned int maxtime;
@@ -549,7 +554,7 @@ static int etp_poll (void)
       --nreqs;
       X_UNLOCK (reqlock);
 
-      if (expect_false (req->type == EIO_GROUP && req->size))
+      if (ecb_expect_false (req->type == EIO_GROUP && req->size))
         {
           req->int1 = 1; /* mark request as delayed */
           continue;
@@ -557,11 +562,11 @@ static int etp_poll (void)
       else
         {
           int res = ETP_FINISH (req);
-          if (expect_false (res))
+          if (ecb_expect_false (res))
             return res;
         }
 
-      if (expect_false (maxreqs && !--maxreqs))
+      if (ecb_expect_false (maxreqs && !--maxreqs))
         break;
 
       if (maxtime)
@@ -577,7 +582,8 @@ static int etp_poll (void)
   return -1;
 }
 
-static void etp_cancel (ETP_REQ *req)
+static void
+etp_cancel (ETP_REQ *req)
 {
   X_LOCK   (wrklock);
   req->flags |= EIO_FLAG_CANCELLED;
@@ -586,14 +592,15 @@ static void etp_cancel (ETP_REQ *req)
   eio_grp_cancel (req);
 }
 
-static void etp_submit (ETP_REQ *req)
+static void
+etp_submit (ETP_REQ *req)
 {
   req->pri -= ETP_PRI_MIN;
 
-  if (expect_false (req->pri < ETP_PRI_MIN - ETP_PRI_MIN)) req->pri = ETP_PRI_MIN - ETP_PRI_MIN;
-  if (expect_false (req->pri > ETP_PRI_MAX - ETP_PRI_MIN)) req->pri = ETP_PRI_MAX - ETP_PRI_MIN;
+  if (ecb_expect_false (req->pri < ETP_PRI_MIN - ETP_PRI_MIN)) req->pri = ETP_PRI_MIN - ETP_PRI_MIN;
+  if (ecb_expect_false (req->pri > ETP_PRI_MAX - ETP_PRI_MIN)) req->pri = ETP_PRI_MAX - ETP_PRI_MIN;
 
-  if (expect_false (req->type == EIO_GROUP))
+  if (ecb_expect_false (req->type == EIO_GROUP))
     {
       /* I hope this is worth it :/ */
       X_LOCK (reqlock);
@@ -622,41 +629,47 @@ static void etp_submit (ETP_REQ *req)
     }
 }
 
-static void etp_set_max_poll_time (double nseconds)
+static void ecb_cold
+etp_set_max_poll_time (double nseconds)
 {
   if (WORDACCESS_UNSAFE) X_LOCK   (reslock);
   max_poll_time = nseconds * EIO_TICKS;
   if (WORDACCESS_UNSAFE) X_UNLOCK (reslock);
 }
 
-static void etp_set_max_poll_reqs (unsigned int maxreqs)
+static void ecb_cold
+etp_set_max_poll_reqs (unsigned int maxreqs)
 {
   if (WORDACCESS_UNSAFE) X_LOCK   (reslock);
   max_poll_reqs = maxreqs;
   if (WORDACCESS_UNSAFE) X_UNLOCK (reslock);
 }
 
-static void etp_set_max_idle (unsigned int nthreads)
+static void ecb_cold
+etp_set_max_idle (unsigned int nthreads)
 {
   if (WORDACCESS_UNSAFE) X_LOCK   (reqlock);
   max_idle = nthreads;
   if (WORDACCESS_UNSAFE) X_UNLOCK (reqlock);
 }
 
-static void etp_set_idle_timeout (unsigned int seconds)
+static void ecb_cold
+etp_set_idle_timeout (unsigned int seconds)
 {
   if (WORDACCESS_UNSAFE) X_LOCK   (reqlock);
   idle_timeout = seconds;
   if (WORDACCESS_UNSAFE) X_UNLOCK (reqlock);
 }
 
-static void etp_set_min_parallel (unsigned int nthreads)
+static void ecb_cold
+etp_set_min_parallel (unsigned int nthreads)
 {
   if (wanted < nthreads)
     wanted = nthreads;
 }
 
-static void etp_set_max_parallel (unsigned int nthreads)
+static void ecb_cold
+etp_set_max_parallel (unsigned int nthreads)
 {
   if (wanted > nthreads)
     wanted = nthreads;
@@ -667,7 +680,8 @@ static void etp_set_max_parallel (unsigned int nthreads)
 
 /*****************************************************************************/
 
-static void grp_try_feed (eio_req *grp)
+static void
+grp_try_feed (eio_req *grp)
 {
   while (grp->size < grp->int2 && !EIO_CANCELLED (grp))
     {
@@ -684,7 +698,8 @@ static void grp_try_feed (eio_req *grp)
     }
 }
 
-static int grp_dec (eio_req *grp)
+static int
+grp_dec (eio_req *grp)
 {
   --grp->size;
 
@@ -698,7 +713,8 @@ static int grp_dec (eio_req *grp)
     return 0;
 }
 
-void eio_destroy (eio_req *req)
+void
+eio_destroy (eio_req *req)
 {
   if ((req)->flags & EIO_FLAG_PTR1_FREE) free (req->ptr1);
   if ((req)->flags & EIO_FLAG_PTR2_FREE) free (req->ptr2);
@@ -706,7 +722,8 @@ void eio_destroy (eio_req *req)
   EIO_DESTROY (req);
 }
 
-static int eio_finish (eio_req *req)
+static int
+eio_finish (eio_req *req)
 {
   int res = EIO_FINISH (req);
 
@@ -733,68 +750,81 @@ static int eio_finish (eio_req *req)
   return res;
 }
 
-void eio_grp_cancel (eio_req *grp)
+void
+eio_grp_cancel (eio_req *grp)
 {
   for (grp = grp->grp_first; grp; grp = grp->grp_next)
     eio_cancel (grp);
 }
 
-void eio_cancel (eio_req *req)
+void
+eio_cancel (eio_req *req)
 {
   etp_cancel (req);
 }
 
-void eio_submit (eio_req *req)
+void
+eio_submit (eio_req *req)
 {
   etp_submit (req);
 }
 
-unsigned int eio_nreqs (void)
+unsigned int
+eio_nreqs (void)
 {
   return etp_nreqs ();
 }
 
-unsigned int eio_nready (void)
+unsigned int
+eio_nready (void)
 {
   return etp_nready ();
 }
 
-unsigned int eio_npending (void)
+unsigned int
+eio_npending (void)
 {
   return etp_npending ();
 }
 
-unsigned int eio_nthreads (void)
+unsigned int ecb_cold
+eio_nthreads (void)
 {
   return etp_nthreads ();
 }
 
-void eio_set_max_poll_time (double nseconds)
+void ecb_cold
+eio_set_max_poll_time (double nseconds)
 {
   etp_set_max_poll_time (nseconds);
 }
 
-void eio_set_max_poll_reqs (unsigned int maxreqs)
+void ecb_cold
+eio_set_max_poll_reqs (unsigned int maxreqs)
 {
   etp_set_max_poll_reqs (maxreqs);
 }
 
-void eio_set_max_idle (unsigned int nthreads)
+void ecb_cold
+eio_set_max_idle (unsigned int nthreads)
 {
   etp_set_max_idle (nthreads);
 }
 
-void eio_set_idle_timeout (unsigned int seconds)
+void ecb_cold
+eio_set_idle_timeout (unsigned int seconds)
 {
   etp_set_idle_timeout (seconds);
 }
 
-void eio_set_min_parallel (unsigned int nthreads)
+void ecb_cold
+eio_set_min_parallel (unsigned int nthreads)
 {
   etp_set_min_parallel (nthreads);
 }
 
-void eio_set_max_parallel (unsigned int nthreads)
+void ecb_cold
+eio_set_max_parallel (unsigned int nthreads)
 {
   etp_set_max_parallel (nthreads);
 }
@@ -874,7 +904,8 @@ eio__utimes (const char *filename, const struct timeval times[2])
 # undef futimes
 # define futimes(fd,times) eio__futimes (fd, times)
 
-static int eio__futimes (int fd, const struct timeval tv[2])
+static int
+eio__futimes (int fd, const struct timeval tv[2])
 {
   errno = ENOSYS;
   return -1;
@@ -888,7 +919,7 @@ static int eio__futimes (int fd, const struct timeval tv[2])
 #endif
 
 /* sync_file_range always needs emulation */
-int
+static int
 eio__sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags)
 {
 #if HAVE_SYNC_FILE_RANGE
@@ -1337,7 +1368,7 @@ eio__scandir (eio_req *req, etp_worker *self)
           {
             int len = D_NAMLEN (entp) + 1;
 
-            while (expect_false (namesoffs + len > namesalloc))
+            while (ecb_expect_false (namesoffs + len > namesalloc))
               {
                 namesalloc *= 2;
                 X_LOCK (wrklock);
@@ -1354,7 +1385,7 @@ eio__scandir (eio_req *req, etp_worker *self)
               {
                 struct eio_dirent *ent;
 
-                if (expect_false (dentoffs == dentalloc))
+                if (ecb_expect_false (dentoffs == dentalloc))
                   {
                     dentalloc *= 2;
                     X_LOCK (wrklock);
@@ -1524,7 +1555,7 @@ eio__mlock (void *addr, size_t length)
 # define eio__msync(a,b,c) ((errno = ENOSYS), -1)
 #else
 
-int
+static int
 eio__msync (void *mem, size_t len, int flags)
 {
   eio_page_align (&mem, &len);
@@ -1544,7 +1575,7 @@ eio__msync (void *mem, size_t len, int flags)
 
 #endif
 
-int
+static int
 eio__mtouch (eio_req *req)
 {
   void *mem  = req->ptr2;
@@ -1660,12 +1691,14 @@ quit:
 
 /*****************************************************************************/
 
-int eio_init (void (*want_poll)(void), void (*done_poll)(void))
+int ecb_cold
+eio_init (void (*want_poll)(void), void (*done_poll)(void))
 {
   return etp_init (want_poll, done_poll);
 }
 
-static void eio_api_destroy (eio_req *req)
+ECB_INLINE void
+eio_api_destroy (eio_req *req)
 {
   free (req);
 }
@@ -1694,7 +1727,8 @@ static void eio_api_destroy (eio_req *req)
       return 0;							\
     }
 
-static void eio_execute (etp_worker *self, eio_req *req)
+static void
+eio_execute (etp_worker *self, eio_req *req)
 {
   switch (req->type)
     {
@@ -2052,7 +2086,8 @@ eio_req *eio_grp (eio_cb cb, void *data)
 /*****************************************************************************/
 /* grp functions */
 
-void eio_grp_feed (eio_req *grp, void (*feed)(eio_req *req), int limit)
+void
+eio_grp_feed (eio_req *grp, void (*feed)(eio_req *req), int limit)
 {
   grp->int2 = limit;
   grp->feed = feed;
@@ -2060,14 +2095,16 @@ void eio_grp_feed (eio_req *grp, void (*feed)(eio_req *req), int limit)
   grp_try_feed (grp);
 }
 
-void eio_grp_limit (eio_req *grp, int limit)
+void
+eio_grp_limit (eio_req *grp, int limit)
 {
   grp->int2 = limit;
 
   grp_try_feed (grp);
 }
 
-void eio_grp_add (eio_req *grp, eio_req *req)
+void
+eio_grp_add (eio_req *grp, eio_req *req)
 {
   assert (("cannot add requests to IO::AIO::GRP after the group finished", grp->int1 != 2));
 
@@ -2088,7 +2125,8 @@ void eio_grp_add (eio_req *grp, eio_req *req)
 /*****************************************************************************/
 /* misc garbage */
 
-ssize_t eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count)
+ssize_t
+eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count)
 {
   etp_worker wrk;
   ssize_t ret;

@@ -45,3 +45,4 @@ TODO: fadvise request
         - work around a Linux (and likely FreeBSD and other kernels) bug
           where sendfile would not transfer all the requested bytes on
           large transfers, using a heuristic.
+        - use libecb, and apply lots of minor space optimisations.
