@@ -202,7 +202,7 @@ static void eio_execute (struct etp_worker *self, eio_req *req);
 #define ETP_NUM_PRI (ETP_PRI_MAX - ETP_PRI_MIN + 1)
 
 /* calculate time difference in ~1/EIO_TICKS of a second */
-ECB_INLINE int
+ecb_inline int
 tvdiff (struct timeval *tv1, struct timeval *tv2)
 {
   return  (tv2->tv_sec  - tv1->tv_sec ) * EIO_TICKS
@@ -1697,7 +1697,7 @@ eio_init (void (*want_poll)(void), void (*done_poll)(void))
   return etp_init (want_poll, done_poll);
 }
 
-ECB_INLINE void
+ecb_inline void
 eio_api_destroy (eio_req *req)
 {
   free (req);
