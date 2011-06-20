@@ -228,7 +228,7 @@ custom data value as C<data>.
 =head3 POSIX API WRAPPERS
 
 These requests simply wrap the POSIX call of the same name, with the same
-arguments. If a function is not implemented by the OS and cnanot be emulated
+arguments. If a function is not implemented by the OS and cannot be emulated
 in some way, then all of these return C<-1> and set C<errorno> to C<ENOSYS>.
 
 =over 4

@@ -7,6 +7,8 @@ TODO: make mtouch/readdir maybe others cancellable in-request
 TODO: fadvise request
 1.0
 	- use nonstandard but maybe-working-on-bsd fork technique.
+        - fix a path-memory-leak in readdir when using the wrappers
+          (reported by Thomas L. Shinnick).
 	- support a max_idle value of 0.
 	- support setting of idle timeout value (eio_set_idle_timeout).
         - readdir: correctly handle malloc failures.
