@@ -1008,7 +1008,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
       if (sbytes)
         res = sbytes;
 
-# elif defined (__APPLE__)
+# elif defined (__APPLE__) && 0 /* broken, as everything on os x */
       off_t sbytes = count;
       res = sendfile (ifd, ofd, offset, &sbytes, 0, 0);
 

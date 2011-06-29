@@ -155,7 +155,10 @@ You submit a request by calling the relevant C<eio_TYPE> function with the
 required parameters, a callback of type C<int (*eio_cb)(eio_req *req)>
 (called C<eio_cb> below) and a freely usable C<void *data> argument.
 
-The return value will either be 0
+The return value will either be 0, in case something went really wrong
+(which can basically only happen on very fatal errors, such as C<malloc>
+returning 0, which is rather unlikely), or a pointer to the newly-created
+and submitted C<eio_req *>.
 
 The callback will be called with an C<eio_req *> which contains the
 results of the request. The members you can access inside that structure
@@ -569,6 +572,28 @@ not really of much use.
 =back
 
 =head3 GROUPING AND LIMITING REQUESTS
+
+There is one more rather special request, C<eio_grp>. It is a very special
+aio request: Instead of doing something, it is a container for other eio
+requests.
+
+There are two primary use cases for this: a) bundle many requests into a
+single, composite, request with a definite callback and the ability to
+cancel the whole request with its subrequests and b) limiting the number
+of "active" requests.
+
+Further below you will find more dicussion of these topics - first follows
+the reference section detailing the request generator and other methods.
+
+=over 4
+
+=item eio_grp (eio_cb cb, void *data)
+
+Creates and submits a group request. 
+
+=back
+
+
 
 #TODO
 

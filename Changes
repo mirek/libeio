@@ -48,3 +48,5 @@ TODO: fadvise request
           where sendfile would not transfer all the requested bytes on
           large transfers, using a heuristic.
         - use libecb, and apply lots of minor space optimisations.
+        - disable sendfile on darwin, broken as everything else.
+
