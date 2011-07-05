@@ -1245,9 +1245,9 @@ eio__realpath (eio_req *req, etp_worker *self)
   char *res;
   char *tmp1, *tmp2;
 #if SYMLOOP_MAX > 32
-  int links = SYMLOOP_MAX;
+  int symlinks = SYMLOOP_MAX;
 #else
-  int links = 32;
+  int symlinks = 32;
 #endif
 
   req->result = -1;
@@ -1275,6 +1275,29 @@ eio__realpath (eio_req *req, etp_worker *self)
   res  = req->ptr2;
   tmp1 = res  + PATH_MAX;
   tmp2 = tmp1 + PATH_MAX;
+
+#if 0 /* disabled, the musl way to do things is just too racy */
+#if __linux && defined(O_NONBLOCK) && defined(O_NOATIME)
+  /* on linux we may be able to ask the kernel */
+  {
+    int fd = open (rel, O_RDONLY | O_NONBLOCK | O_NOCTTY | O_NOATIME);
+
+    if (fd >= 0)
+      {
+        sprintf (tmp1, "/proc/self/fd/%d", fd);
+        req->result = readlink (tmp1, res, PATH_MAX);
+        close (fd);
+
+        /* here we should probably stat the open file and the disk file, to make sure they still match */
+
+        if (req->result > 0)
+          goto done;
+      }
+    else if (errno == ELOOP || errno == ENAMETOOLONG || errno == ENOENT || errno == ENOTDIR || errno == EIO)
+      return;
+  }
+#endif
+#endif
 
   if (*rel != '/')
     {
@@ -1349,6 +1372,10 @@ eio__realpath (eio_req *req, etp_worker *self)
             if (linklen + 1 + rellen >= PATH_MAX)
               return;
 
+            errno = ELOOP;
+            if (!--symlinks)
+              return;
+
             if (*tmp1 == '/')
               res = req->ptr2; /* symlink resolves to an absolute path */
 
@@ -1366,6 +1393,8 @@ eio__realpath (eio_req *req, etp_worker *self)
     *res++ = '/';
 
   req->result = res - (char *)req->ptr2;
+
+done:
   req->ptr2 = realloc (req->ptr2, req->result); /* trade time for space savings */
 }
 
