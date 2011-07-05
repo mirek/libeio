@@ -132,9 +132,9 @@ If C<eio_poll ()> is configured to not handle all results in one go
 (i.e. it returns C<-1>) then you should start an idle watcher that calls
 C<eio_poll> until it returns something C<!= -1>.
 
-A full-featured wrapper would look as follows (if C<eio_poll> is handling
-all requests, it can of course be simplified a lot by removing the idle
-watcher logic):
+A full-featured conenctor between libeio and libev would look as follows
+(if C<eio_poll> is handling all requests, it can of course be simplified a
+lot by removing the idle watcher logic):
 
    static struct ev_loop *loop;
    static ev_idle repeat_watcher;
@@ -180,9 +180,12 @@ For most other event loops, you would typically use a pipe - the event
 loop should be told to wait for read readiness on the read end. In
 C<want_poll> you would write a single byte, in C<done_poll> you would try
 to read that byte, and in the callback for the read end, you would call
-C<eio_poll>. The race is avoided here because the event loop should invoke
-your callback again and again until the byte has been read (as the pipe
-read callback does not read it, only C<done_poll>).
+C<eio_poll>.
+
+You don't have to take special care in the case C<eio_poll> doesn't handle
+all requests, as the done callback will not be invoked, so the event loop
+will still signal readyness for the pipe until I<all> results have been
+processed.
 
 
 =head1 HIGH LEVEL REQUEST API
