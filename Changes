@@ -49,5 +49,5 @@ TODO: fadvise request
           large transfers, using a heuristic.
         - use libecb, and apply lots of minor space optimisations.
         - disable sendfile on darwin, broken as everything else.
-        - add realpath function.
+        - add realpath request and implementation.
 
