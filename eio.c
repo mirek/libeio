@@ -591,9 +591,7 @@ etp_poll (void)
 static void
 etp_cancel (ETP_REQ *req)
 {
-  X_LOCK   (wrklock);
-  req->flags |= EIO_FLAG_CANCELLED;
-  X_UNLOCK (wrklock);
+  req->cancelled = 1;
 
   eio_grp_cancel (req);
 }
