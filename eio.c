@@ -741,7 +741,7 @@ eio_finish (eio_req *req)
 
       res2 = grp_dec (grp);
 
-      if (!res && res2)
+      if (!res)
         res = res2;
     }
 

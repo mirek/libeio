@@ -126,11 +126,55 @@ returns C<-1>.
 For libev, you would typically use an C<ev_async> watcher: the
 C<want_poll> callback would invoke C<ev_async_send> to wake up the event
 loop. Inside the callback set for the watcher, one would call C<eio_poll
-()> (followed by C<ev_async_send> again if C<eio_poll> indicates that not
-all requests have been handled yet). The race is taken care of because
-libev resets/rearms the async watcher before calling your callback,
-and therefore, before calling C<eio_poll>. This might result in (some)
-spurious wake-ups, but is generally harmless.
+()>.
+
+If C<eio_poll ()> is configured to not handle all results in one go
+(i.e. it returns C<-1>) then you should start an idle watcher that calls
+C<eio_poll> until it returns something C<!= -1>.
+
+A full-featured wrapper would look as follows (if C<eio_poll> is handling
+all requests, it can of course be simplified a lot by removing the idle
+watcher logic):
+
+   static struct ev_loop *loop;
+   static ev_idle repeat_watcher;
+   static ev_async ready_watcher;
+
+   /* idle watcher callback, only used when eio_poll */
+   /* didn't handle all results in one call */
+   static void
+   repeat (EV_P_ ev_idle *w, int revents)
+   {
+     if (eio_poll () != -1)
+       ev_idle_stop (EV_A_ w);
+   }
+
+   /* eio has some results, process them */
+   static void
+   ready (EV_P_ ev_async *w, int revents)
+   {
+     if (eio_poll () == -1)
+       ev_idle_start (EV_A_ &repeat_watcher);
+   }
+
+   /* wake up the event loop */
+   static void
+   want_poll (void)
+   {
+     ev_async_send (loop, &ready_watcher)
+   }
+
+   void
+   my_init_eio ()
+   {
+     loop = EV_DEFAULT;
+
+     ev_idle_init (&repeat_watcher, repeat);
+     ev_async_init (&ready_watcher, ready);
+     ev_async_start (loop &watcher);
+
+     eio_init (want_poll, 0);
+   }
 
 For most other event loops, you would typically use a pipe - the event
 loop should be told to wait for read readiness on the read end. In
