@@ -321,11 +321,9 @@ void eio_grp_cancel    (eio_req *grp); /* cancels all sub requests but not the g
 void eio_submit (eio_req *req);
 /* cancel a request as soon fast as possible, if possible */
 void eio_cancel (eio_req *req);
-/* destroy a request that has never been submitted */
-void eio_destroy (eio_req *req);
 
 /*****************************************************************************/
-/* convinience functions */
+/* convenience functions */
 
 ssize_t eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count);
 

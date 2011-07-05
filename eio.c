@@ -62,10 +62,16 @@
 #include <assert.h>
 
 /* intptr_t comes from unistd.h, says POSIX/UNIX/tradition */
-/* intptr_t only comes form stdint.h, says idiot openbsd coder */
+/* intptr_t only comes from stdint.h, says idiot openbsd coder */
 #if HAVE_STDINT_H
 # include <stdint.h>
 #endif
+
+#ifndef ECANCELED
+# define ECANCELED EDOM
+#endif
+
+static void eio_destroy (eio_req *req);
 
 #ifndef EIO_FINISH
 # define EIO_FINISH(req)  ((req)->finish) && !EIO_CANCELLED (req) ? (req)->finish (req) : 0
@@ -713,7 +719,7 @@ grp_dec (eio_req *grp)
     return 0;
 }
 
-void
+static void
 eio_destroy (eio_req *req)
 {
   if ((req)->flags & EIO_FLAG_PTR1_FREE) free (req->ptr1);
@@ -1831,8 +1837,7 @@ X_THREAD_PROC (etp_proc)
       if (req->type < 0)
         goto quit;
 
-      if (!EIO_CANCELLED (req))
-        ETP_EXECUTE (self, req);
+      ETP_EXECUTE (self, req);
 
       X_LOCK (reslock);
 
@@ -1896,6 +1901,13 @@ eio_api_destroy (eio_req *req)
 static void
 eio_execute (etp_worker *self, eio_req *req)
 {
+  if (ecb_expect_false (EIO_CANCELLED (req)))
+    {
+      req->result  = -1;
+      req->errorno = ECANCELED;
+      return;
+    }
+
   switch (req->type)
     {
       case EIO_READ:      ALLOC (req->size);

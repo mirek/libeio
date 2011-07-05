@@ -47,19 +47,20 @@ time differences throughout libeio.
 
 =head2 FORK SUPPORT
 
-Calling C<fork ()> is fully supported by this module. It is implemented in these steps:
+Calling C<fork ()> is fully supported by this module - but you must not
+rely on this. It is currently implemented in these steps:
 
-   1. wait till all requests in "execute" state have been handled
-      (basically requests that are already handed over to the kernel).
-   2. fork
-   3. in the parent, continue business as usual, done
-   4. in the child, destroy all ready and pending requests and free the
-      memory used by the worker threads. This gives you a fully empty
-      libeio queue.
+  1. wait till all requests in "execute" state have been handled
+     (basically requests that are already handed over to the kernel).
+  2. fork
+  3. in the parent, continue business as usual, done
+  4. in the child, destroy all ready and pending requests and free the
+     memory used by the worker threads. This gives you a fully empty
+     libeio queue.
 
-Note, however, since libeio does use threads, thr above guarantee doesn't
+Note, however, since libeio does use threads, the above guarantee doesn't
 cover your libc, for example, malloc and other libc functions are not
-fork-safe, so there is very little you can do after a fork, and in fatc,
+fork-safe, so there is very little you can do after a fork, and in fact,
 the above might crash, and thus change.
 
 =head1 INITIALISATION/INTEGRATION
@@ -136,45 +137,45 @@ A full-featured conenctor between libeio and libev would look as follows
 (if C<eio_poll> is handling all requests, it can of course be simplified a
 lot by removing the idle watcher logic):
 
-   static struct ev_loop *loop;
-   static ev_idle repeat_watcher;
-   static ev_async ready_watcher;
+  static struct ev_loop *loop;
+  static ev_idle repeat_watcher;
+  static ev_async ready_watcher;
 
-   /* idle watcher callback, only used when eio_poll */
-   /* didn't handle all results in one call */
-   static void
-   repeat (EV_P_ ev_idle *w, int revents)
-   {
-     if (eio_poll () != -1)
-       ev_idle_stop (EV_A_ w);
-   }
+  /* idle watcher callback, only used when eio_poll */
+  /* didn't handle all results in one call */
+  static void
+  repeat (EV_P_ ev_idle *w, int revents)
+  {
+    if (eio_poll () != -1)
+      ev_idle_stop (EV_A_ w);
+  }
 
-   /* eio has some results, process them */
-   static void
-   ready (EV_P_ ev_async *w, int revents)
-   {
-     if (eio_poll () == -1)
-       ev_idle_start (EV_A_ &repeat_watcher);
-   }
+  /* eio has some results, process them */
+  static void
+  ready (EV_P_ ev_async *w, int revents)
+  {
+    if (eio_poll () == -1)
+      ev_idle_start (EV_A_ &repeat_watcher);
+  }
 
-   /* wake up the event loop */
-   static void
-   want_poll (void)
-   {
-     ev_async_send (loop, &ready_watcher)
-   }
+  /* wake up the event loop */
+  static void
+  want_poll (void)
+  {
+    ev_async_send (loop, &ready_watcher)
+  }
 
-   void
-   my_init_eio ()
-   {
-     loop = EV_DEFAULT;
+  void
+  my_init_eio ()
+  {
+    loop = EV_DEFAULT;
 
-     ev_idle_init (&repeat_watcher, repeat);
-     ev_async_init (&ready_watcher, ready);
-     ev_async_start (loop &watcher);
+    ev_idle_init (&repeat_watcher, repeat);
+    ev_async_init (&ready_watcher, ready);
+    ev_async_start (loop &watcher);
 
-     eio_init (want_poll, 0);
-   }
+    eio_init (want_poll, 0);
+  }
 
 For most other event loops, you would typically use a pipe - the event
 loop should be told to wait for read readiness on the read end. In
@@ -266,6 +267,38 @@ For example, to open a file, you could do this:
 
 Note that you additionally need to call C<eio_poll> when the C<want_cb>
 indicates that requests are ready to be processed.
+
+=head2 CANCELLING REQUESTS
+
+Sometimes the need for a request goes away before the request is
+finished. In that case, one can cancel the reqiest by a call to
+C<eio_cancel>:
+
+=over 4
+
+=item eio_cancel (eio_req *req)
+
+Cancel the request. If the request is currently executing it might still
+continue to execute, and in other cases it might still take a while till
+the request is cancelled.
+
+Even if cancelled, the finish callback will still be invoked - the
+callbacks of all cancellable requests need to check whether the request
+has been cancelled by calling C<EIO_CANCELLED (req)>:
+
+  static int
+  my_eio_cb (eio_req *req)
+  {
+    if (EIO_CANCELLED (req))
+      return 0;
+  }
+
+In addition, cancelled requests will either have C<< req->result >> set to
+C<-1> and C<errno> to C<ECANCELED>, or otherwise they were successfully
+executed despite being cancelled (e.g. when they have already been
+executed at the time they were cancelled).
+
+=back
 
 =head2 AVAILABLE REQUESTS
 
@@ -384,7 +417,7 @@ not 0-terminated) - this is similar to readlink.
 Stats a file - if C<< req->result >> indicates success, then you can
 access the C<struct stat>-like structure via C<< req->ptr2 >>:
 
-   EIO_STRUCT_STAT *statdata = (EIO_STRUCT_STAT *)req->ptr2;
+  EIO_STRUCT_STAT *statdata = (EIO_STRUCT_STAT *)req->ptr2;
 
 =item eio_statvfs   (const char *path, int pri, eio_cb cb, void *data)
 
@@ -393,7 +426,7 @@ access the C<struct stat>-like structure via C<< req->ptr2 >>:
 Stats a filesystem - if C<< req->result >> indicates success, then you can
 access the C<struct statvfs>-like structure via C<< req->ptr2 >>:
 
-   EIO_STRUCT_STATVFS *statdata = (EIO_STRUCT_STATVFS *)req->ptr2;
+  EIO_STRUCT_STATVFS *statdata = (EIO_STRUCT_STATVFS *)req->ptr2;
 
 =back
 
@@ -443,14 +476,14 @@ If this flag is specified, then, in addition to the names in C<ptr2>,
 also an array of C<struct eio_dirent> is returned, in C<ptr1>. A C<struct
 eio_dirent> looks like this:
 
-   struct eio_dirent
-   {
-     int nameofs; /* offset of null-terminated name string in (char *)req->ptr2 */
-     unsigned short namelen; /* size of filename without trailing 0 */
-     unsigned char type; /* one of EIO_DT_* */
-     signed char score; /* internal use */
-     ino_t inode; /* the inode number, if available, otherwise unspecified */
-   };
+  struct eio_dirent
+  {
+    int nameofs; /* offset of null-terminated name string in (char *)req->ptr2 */
+    unsigned short namelen; /* size of filename without trailing 0 */
+    unsigned char type; /* one of EIO_DT_* */
+    signed char score; /* internal use */
+    ino_t inode; /* the inode number, if available, otherwise unspecified */
+  };
 
 The only members you normally would access are C<nameofs>, which is the
 byte-offset from C<ptr2> to the start of the name, C<namelen> and C<type>.
@@ -640,9 +673,20 @@ the reference section detailing the request generator and other methods.
 
 =over 4
 
-=item eio_grp (eio_cb cb, void *data)
+=item eio_req *grp = eio_grp (eio_cb cb, void *data)
 
-Creates and submits a group request. 
+Creates, submits and returns a group request.
+
+=item eio_grp_add (eio_req *grp, eio_req *req)
+
+Adds a request to the request group.
+
+=item eio_grp_cancel (eio_req *grp)
+
+Cancels all requests I<in> the group, but I<not> the group request
+itself. You can cancel the group request via a normal C<eio_cancel> call.
+
+
 
 =back
 
@@ -656,7 +700,6 @@ Creates and submits a group request.
 eio_req *eio_grp       (eio_cb cb, void *data);
 void eio_grp_feed      (eio_req *grp, void (*feed)(eio_req *req), int limit);
 void eio_grp_limit     (eio_req *grp, int limit);
-void eio_grp_add       (eio_req *grp, eio_req *req);
 void eio_grp_cancel    (eio_req *grp); /* cancels all sub requests but not the group */
 
 
@@ -673,13 +716,13 @@ void eio_grp_cancel    (eio_req *grp); /* cancels all sub requests but not the g
 A request is represented by a structure of type C<eio_req>. To initialise
 it, clear it to all zero bytes:
 
-   eio_req req;
+  eio_req req;
 
-   memset (&req, 0, sizeof (req));
+  memset (&req, 0, sizeof (req));
 
 A more common way to initialise a new C<eio_req> is to use C<calloc>:
 
-   eio_req *req = calloc (1, sizeof (*req));
+  eio_req *req = calloc (1, sizeof (*req));
 
 In either case, libeio neither allocates, initialises or frees the
 C<eio_req> structure for you - it merely uses it.
