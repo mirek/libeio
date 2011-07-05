@@ -185,7 +185,7 @@ C<eio_poll>.
 
 You don't have to take special care in the case C<eio_poll> doesn't handle
 all requests, as the done callback will not be invoked, so the event loop
-will still signal readyness for the pipe until I<all> results have been
+will still signal readiness for the pipe until I<all> results have been
 processed.
 
 
@@ -263,7 +263,7 @@ For example, to open a file, you could do this:
   /* the first three arguments are passed to open(2) */
   /* the remaining are priority, callback and data */
   if (!eio_open ("/etc/passwd", O_RDONLY, 0, 0, file_open_done, 0))
-    abort (); /* something ent wrong, we will all die!!! */
+    abort (); /* something went wrong, we will all die!!! */
 
 Note that you additionally need to call C<eio_poll> when the C<want_cb>
 indicates that requests are ready to be processed.
@@ -271,16 +271,16 @@ indicates that requests are ready to be processed.
 =head2 CANCELLING REQUESTS
 
 Sometimes the need for a request goes away before the request is
-finished. In that case, one can cancel the reqiest by a call to
+finished. In that case, one can cancel the request by a call to
 C<eio_cancel>:
 
 =over 4
 
 =item eio_cancel (eio_req *req)
 
-Cancel the request. If the request is currently executing it might still
-continue to execute, and in other cases it might still take a while till
-the request is cancelled.
+Cancel the request (and all it's subrequests). If the request is currently
+executing it might still continue to execute, and in other cases it might
+still take a while till the request is cancelled.
 
 Even if cancelled, the finish callback will still be invoked - the
 callbacks of all cancellable requests need to check whether the request
@@ -293,10 +293,13 @@ has been cancelled by calling C<EIO_CANCELLED (req)>:
       return 0;
   }
 
-In addition, cancelled requests will either have C<< req->result >> set to
-C<-1> and C<errno> to C<ECANCELED>, or otherwise they were successfully
-executed despite being cancelled (e.g. when they have already been
-executed at the time they were cancelled).
+In addition, cancelled requests will I<either> have C<< req->result >>
+set to C<-1> and C<errno> to C<ECANCELED>, or I<otherwise> they were
+successfully executed, despite being cancelled (e.g. when they have
+already been executed at the time they were cancelled).
+
+C<EIO_CANCELLED> is still true for requests that have successfully
+executed, as long as C<eio_cancel> was called on them at some point.
 
 =back
 
@@ -433,8 +436,8 @@ access the C<struct statvfs>-like structure via C<< req->ptr2 >>:
 =head3 READING DIRECTORIES
 
 Reading directories sounds simple, but can be rather demanding, especially
-if you want to do stuff such as traversing a diretcory hierarchy or
-processing all files in a directory. Libeio can assist thess complex tasks
+if you want to do stuff such as traversing a directory hierarchy or
+processing all files in a directory. Libeio can assist these complex tasks
 with it's C<eio_readdir> call.
 
 =over 4
@@ -536,15 +539,15 @@ suitable for stat()'ing each one. That is, when you plan to stat()
 all files in the given directory, then the returned order will likely
 be fastest.
 
-If both this flag and C<EIO_READDIR_DIRS_FIRST> are specified, then
-the likely dirs come first, resulting in a less optimal stat order.
+If both this flag and C<EIO_READDIR_DIRS_FIRST> are specified, then the
+likely directories come first, resulting in a less optimal stat order.
 
 =item EIO_READDIR_FOUND_UNKNOWN
 
 This flag should not be specified when calling C<eio_readdir>. Instead,
 it is being set by C<eio_readdir> (you can access the C<flags> via C<<
 req->int1 >>, when any of the C<type>'s found were C<EIO_DT_UNKNOWN>. The
-absense of this flag therefore indicates that all C<type>'s are known,
+absence of this flag therefore indicates that all C<type>'s are known,
 which can be used to speed up some algorithms.
 
 A typical use case would be to identify all subdirectories within a
@@ -642,7 +645,7 @@ API.
 
 =item eio_busy (eio_tstamp delay, int pri, eio_cb cb, void *data)
 
-This is a a request that takes C<delay> seconds to execute, but otherwise
+This is a request that takes C<delay> seconds to execute, but otherwise
 does nothing - it simply puts one of the worker threads to sleep for this
 long.
 
@@ -668,8 +671,9 @@ single, composite, request with a definite callback and the ability to
 cancel the whole request with its subrequests and b) limiting the number
 of "active" requests.
 
-Further below you will find more dicussion of these topics - first follows
-the reference section detailing the request generator and other methods.
+Further below you will find more discussion of these topics - first
+follows the reference section detailing the request generator and other
+methods.
 
 =over 4
 
@@ -750,14 +754,18 @@ C<0.01> seconds or so.
 
 Note that:
 
-a) libeio doesn't know how long your request callbacks take, so the time
-spent in C<eio_poll> is up to one callback invocation longer then this
-interval.
+=over 4
 
-b) this is implemented by calling C<gettimeofday> after each request,
-which can be costly.
+=item a) libeio doesn't know how long your request callbacks take, so the
+time spent in C<eio_poll> is up to one callback invocation longer then
+this interval.
 
-c) at least one request will be handled.
+=item b) this is implemented by calling C<gettimeofday> after each
+request, which can be costly.
+
+=item c) at least one request will be handled.
+
+=back
 
 =item eio_set_max_poll_reqs (unsigned int nreqs)
 
