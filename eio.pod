@@ -322,6 +322,12 @@ C<< req->result >>.
       free (target);
     }
 
+=item eio_realpath  (const char *path, int pri, eio_cb cb, void *data)
+
+Similar to the realpath libc function, but unlike that one, result is
+C<0> on failure and the length of the returned path in C<ptr2> - this is
+similar to readlink.
+
 =item eio_stat      (const char *path, int pri, eio_cb cb, void *data)
 
 =item eio_lstat     (const char *path, int pri, eio_cb cb, void *data)

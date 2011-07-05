@@ -154,7 +154,7 @@ enum
   EIO_MLOCK, EIO_MLOCKALL,
   EIO_UNLINK, EIO_RMDIR, EIO_MKDIR, EIO_RENAME,
   EIO_MKNOD, EIO_READDIR,
-  EIO_LINK, EIO_SYMLINK, EIO_READLINK,
+  EIO_LINK, EIO_SYMLINK, EIO_READLINK, EIO_REALPATH,
   EIO_GROUP, EIO_NOP,
   EIO_BUSY
 };
@@ -284,6 +284,7 @@ eio_req *eio_readdir   (const char *path, int flags, int pri, eio_cb cb, void *d
 eio_req *eio_rmdir     (const char *path, int pri, eio_cb cb, void *data);
 eio_req *eio_unlink    (const char *path, int pri, eio_cb cb, void *data);
 eio_req *eio_readlink  (const char *path, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */
+eio_req *eio_realpath  (const char *path, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */
 eio_req *eio_stat      (const char *path, int pri, eio_cb cb, void *data); /* stat buffer=ptr2 allocated dynamically */
 eio_req *eio_lstat     (const char *path, int pri, eio_cb cb, void *data); /* stat buffer=ptr2 allocated dynamically */
 eio_req *eio_statvfs   (const char *path, int pri, eio_cb cb, void *data); /* stat buffer=ptr2 allocated dynamically */

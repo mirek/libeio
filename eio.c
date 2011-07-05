@@ -837,6 +837,10 @@ int eio_poll (void)
 /*****************************************************************************/
 /* work around various missing functions */
 
+#if _POSIX_VERSION < 200809L
+# define realpath(path,resolved_path) (errno = ENOSYS, 0)
+#endif
+
 #if !HAVE_PREADWRITE
 # undef pread
 # undef pwrite
@@ -1776,6 +1780,11 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_SYMLINK:   req->result = symlink   (req->ptr1, req->ptr2); break;
       case EIO_MKNOD:     req->result = mknod     (req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
 
+      case EIO_REALPATH:  req->flags |= EIO_FLAG_PTR2_FREE;
+                          req->ptr2   = realpath (req->ptr1, 0);
+                          req->result = req->ptr2 ? strlen (req->ptr2) : -1;
+                          break;
+
       case EIO_READLINK:  ALLOC (PATH_MAX);
                           req->result = readlink  (req->ptr1, req->ptr2, PATH_MAX); break;
 
@@ -2000,6 +2009,11 @@ eio__1path (int type, const char *path, int pri, eio_cb cb, void *data)
 eio_req *eio_readlink (const char *path, int pri, eio_cb cb, void *data)
 {
   return eio__1path (EIO_READLINK, path, pri, cb, data);
+}
+
+eio_req *eio_realpath (const char *path, int pri, eio_cb cb, void *data)
+{
+  return eio__1path (EIO_REALPATH, path, pri, cb, data);
 }
 
 eio_req *eio_stat (const char *path, int pri, eio_cb cb, void *data)
