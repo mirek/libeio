@@ -951,10 +951,10 @@ eio__sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags)
 }
 
 static int
-eio__fallocate (int fd, int mode, off_t offset, size_t nbytes)
+eio__fallocate (int fd, int mode, off_t offset, size_t len)
 {
 #if HAVE_FALLOCATE
-  return fallocate (fd, offset, nbytes, flags);
+  return fallocate (fd, mode, offset, len);
 #else
   errno = ENOSYS;
   return -1;

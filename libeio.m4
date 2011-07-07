@@ -128,7 +128,7 @@ AC_CACHE_CHECK(for fallocate, ac_cv_fallocate, [AC_LINK_IFELSE([
 int main (void)
 {
    int fd = 0;
-   int mode = FALLOC_FL_KEEP_SIZE;
+   int mode = 0;
    off_t offset = 1;
    off_t len = 1;
    int res;
