@@ -133,7 +133,7 @@ If C<eio_poll ()> is configured to not handle all results in one go
 (i.e. it returns C<-1>) then you should start an idle watcher that calls
 C<eio_poll> until it returns something C<!= -1>.
 
-A full-featured conenctor between libeio and libev would look as follows
+A full-featured connector between libeio and libev would look as follows
 (if C<eio_poll> is handling all requests, it can of course be simplified a
 lot by removing the idle watcher logic):
 

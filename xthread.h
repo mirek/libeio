@@ -2,7 +2,7 @@
 #define XTHREAD_H_
 
 /* whether word reads are potentially non-atomic.
- * this is conservatice, likely most arches this runs
+ * this is conservative, likely most arches this runs
  * on have atomic word read/writes.
  */
 #ifndef WORDACCESS_UNSAFE
