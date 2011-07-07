@@ -119,14 +119,12 @@ enum
 };
 
 /* eio_mtouch flags */
-
 enum
 {
   EIO_MT_MODIFY     = 1
 };
 
 /* eio_sync_file_range flags */
-
 enum
 {
   EIO_SYNC_FILE_RANGE_WAIT_BEFORE = 1,
@@ -134,10 +132,16 @@ enum
   EIO_SYNC_FILE_RANGE_WAIT_AFTER  = 4
 };
 
-typedef double eio_tstamp; /* feel free to use double in your code directly */
+/* eio_fallocate flags */
+enum
+{
+  EIO_FALLOC_FL_KEEP_SIZE = 1 /* MUST match the value in linux/falloc.h */
+};
+
+/* timestamps and differences - feel free to use double in your code directly */
+typedef double eio_tstamp;
 
 /* the eio request structure */
-
 enum
 {
   EIO_CUSTOM,
@@ -151,7 +155,7 @@ enum
   EIO_CHMOD, EIO_FCHMOD,
   EIO_CHOWN, EIO_FCHOWN,
   EIO_SYNC, EIO_FSYNC, EIO_FDATASYNC,
-  EIO_MSYNC, EIO_MTOUCH, EIO_SYNC_FILE_RANGE,
+  EIO_MSYNC, EIO_MTOUCH, EIO_SYNC_FILE_RANGE, EIO_FALLOCATE,
   EIO_MLOCK, EIO_MLOCKALL,
   EIO_UNLINK, EIO_RMDIR, EIO_MKDIR, EIO_RENAME,
   EIO_MKNOD, EIO_READDIR,
@@ -183,8 +187,8 @@ struct eio_req
   eio_req volatile *next; /* private ETP */
 
   ssize_t result;  /* result of syscall, e.g. result = read (... */
-  off_t offs;      /* read, write, truncate, readahead, sync_file_range: file offset, mknod: dev_t */
-  size_t size;     /* read, write, readahead, sendfile, msync, mlock, sync_file_range: length */
+  off_t offs;      /* read, write, truncate, readahead, sync_file_range, fallocate: file offset, mknod: dev_t */
+  size_t size;     /* read, write, readahead, sendfile, msync, mlock, sync_file_range, fallocate: length */
   void *ptr1;      /* all applicable requests: pathname, old name; readdir: optional eio_dirents */
   void *ptr2;      /* all applicable requests: new name or memory buffer; readdir: name strings */
   eio_tstamp nv1;  /* utime, futime: atime; busy: sleep time */
@@ -192,7 +196,7 @@ struct eio_req
 
   int type;        /* EIO_xxx constant ETP */
   int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open, msync, mlockall, readdir: flags */
-  long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode, sync_file_range: flags */
+  long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode, sync_file_range, fallocate: flags */
   long int3;       /* chown, fchown: gid */
   int errorno;     /* errno value on syscall return */
 
@@ -268,6 +272,7 @@ eio_req *eio_mtouch    (void *addr, size_t length, int flags, int pri, eio_cb cb
 eio_req *eio_mlock     (void *addr, size_t length, int pri, eio_cb cb, void *data);
 eio_req *eio_mlockall  (int flags, int pri, eio_cb cb, void *data);
 eio_req *eio_sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags, int pri, eio_cb cb, void *data);
+eio_req *eio_fallocate (int fd, int mode, off_t offset, size_t len, int pri, eio_cb cb, void *data);
 eio_req *eio_close     (int fd, int pri, eio_cb cb, void *data);
 eio_req *eio_readahead (int fd, off_t offset, size_t length, int pri, eio_cb cb, void *data);
 eio_req *eio_read      (int fd, void *buf, size_t length, off_t offset, int pri, eio_cb cb, void *data);

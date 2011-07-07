@@ -595,6 +595,15 @@ as calling C<fdatasync>.
 Flags can be any combination of C<EIO_SYNC_FILE_RANGE_WAIT_BEFORE>,
 C<EIO_SYNC_FILE_RANGE_WRITE> and C<EIO_SYNC_FILE_RANGE_WAIT_AFTER>.
 
+=item eio_fallocate (int fd, int mode, off_t offset, off_t len, int pri, eio_cb cb, void *data)
+
+Calls C<fallocate> (note: I<NOT> C<posix_fallocate>!). If the syscall is
+missing, then it returns failure and sets C<errno> to C<ENOSYS>.
+
+The C<mode> argument can be C<0> (for behaviour similar to
+C<posix_fallocate>), or C<EIO_FALLOC_FL_KEEP_SIZE>, which keeps the size
+of the file unchanged (but still preallocates space beyond end of file).
+
 =back
 
 =head3 LIBEIO-SPECIFIC REQUESTS

@@ -51,4 +51,5 @@ TODO: fadvise request
         - disable sendfile on darwin, broken as everything else.
         - add realpath request and implementation.
 	- cancelled requests will still invoke their request callbacks.
+        - add fallocate.
 

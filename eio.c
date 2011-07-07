@@ -950,6 +950,17 @@ eio__sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags)
   return fdatasync (fd);
 }
 
+static int
+eio__fallocate (int fd, int mode, off_t offset, size_t nbytes)
+{
+#if HAVE_FALLOCATE
+  return fallocate (fd, offset, nbytes, flags);
+#else
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
 #if !HAVE_READAHEAD
 # undef readahead
 # define readahead(fd,offset,count) eio__readahead (fd, offset, count, self)
@@ -1965,6 +1976,7 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_MLOCK:     req->result = eio__mlock (req->ptr2, req->size); break;
       case EIO_MLOCKALL:  req->result = eio__mlockall (req->int1); break;
       case EIO_SYNC_FILE_RANGE: req->result = eio__sync_file_range (req->int1, req->offs, req->size, req->int2); break;
+      case EIO_FALLOCATE: req->result = eio__fallocate (req->int1, req->int2, req->offs, req->size); break;
 
       case EIO_READDIR:   eio__scandir (req, self); break;
 
@@ -2072,6 +2084,11 @@ eio_req *eio_mlockall (int flags, int pri, eio_cb cb, void *data)
 eio_req *eio_sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags, int pri, eio_cb cb, void *data)
 {
   REQ (EIO_SYNC_FILE_RANGE); req->int1 = fd; req->offs = offset; req->size = nbytes; req->int2 = flags; SEND;
+}
+
+eio_req *eio_fallocate (int fd, int mode, off_t offset, size_t len, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_FALLOCATE); req->int1 = fd; req->int2 = mode; req->offs = offset; req->size = len; SEND;
 }
 
 eio_req *eio_fdatasync (int fd, int pri, eio_cb cb, void *data)
