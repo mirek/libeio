@@ -383,6 +383,9 @@ reqq_shift (etp_reqq *q)
 static void ecb_cold
 etp_thread_init (void)
 {
+#if !HAVE_PREADWRITE
+  X_MUTEX_CREATE (preadwritelock);
+#endif
   X_MUTEX_CREATE (wrklock);
   X_MUTEX_CREATE (reslock);
   X_MUTEX_CREATE (reqlock);
@@ -392,23 +395,11 @@ etp_thread_init (void)
 static void ecb_cold
 etp_atfork_prepare (void)
 {
-  X_LOCK (wrklock);
-  X_LOCK (reqlock);
-  X_LOCK (reslock);
-#if !HAVE_PREADWRITE
-  X_LOCK (preadwritelock);
-#endif
 }
 
 static void ecb_cold
 etp_atfork_parent (void)
 {
-#if !HAVE_PREADWRITE
-  X_UNLOCK (preadwritelock);
-#endif
-  X_UNLOCK (reslock);
-  X_UNLOCK (reqlock);
-  X_UNLOCK (wrklock);
 }
 
 static void ecb_cold
@@ -1805,12 +1796,15 @@ X_THREAD_PROC (etp_proc)
   ETP_REQ *req;
   struct timespec ts;
   etp_worker *self = (etp_worker *)thr_arg;
+  int timeout;
 
-  /* try to distribute timeouts somewhat randomly */
+  /* try to distribute timeouts somewhat evenly */
   ts.tv_nsec = ((unsigned long)self & 1023UL) * (1000000000UL / 1024UL);
 
   for (;;)
     {
+      ts.tv_sec = 0;
+
       X_LOCK (reqlock);
 
       for (;;)
@@ -1820,23 +1814,28 @@ X_THREAD_PROC (etp_proc)
           if (req)
             break;
 
+          if (ts.tv_sec == 1) /* no request, but timeout detected, let's quit */
+            {
+              X_UNLOCK (reqlock);
+              X_LOCK (wrklock);
+              --started;
+              X_UNLOCK (wrklock);
+              goto quit;
+            }
+
           ++idle;
 
-          ts.tv_sec = time (0) + idle_timeout;
-          if (X_COND_TIMEDWAIT (reqwait, reqlock, ts) == ETIMEDOUT)
+          if (idle <= max_idle)
+            /* we are allowed to idle, so do so without any timeout */
+            X_COND_WAIT (reqwait, reqlock);
+          else
             {
-              if (idle > max_idle)
-                {
-                  --idle;
-                  X_UNLOCK (reqlock);
-                  X_LOCK (wrklock);
-                  --started;
-                  X_UNLOCK (wrklock);
-                  goto quit;
-                }
+              /* initialise timeout once */
+              if (!ts.tv_sec)
+                ts.tv_sec = time (0) + idle_timeout;
 
-              /* we are allowed to idle, so do so without any timeout */
-              X_COND_WAIT (reqwait, reqlock);
+              if (X_COND_TIMEDWAIT (reqwait, reqlock, ts) == ETIMEDOUT)
+                ts.tv_sec = 1; /* assuming this is not a value computed above.,.. */
             }
 
           --idle;
