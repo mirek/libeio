@@ -56,11 +56,11 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
 #include <limits.h>
 #include <fcntl.h>
 #include <assert.h>
 
+#include <sys/statvfs.h>
 /* intptr_t comes from unistd.h, says POSIX/UNIX/tradition */
 /* intptr_t only comes from stdint.h, says idiot openbsd coder */
 #if HAVE_STDINT_H
@@ -85,43 +85,83 @@ static void eio_destroy (eio_req *req);
 # define EIO_FEED(req)    do { if ((req)->feed   ) (req)->feed    (req); } while (0)
 #endif
 
+#ifndef EIO_FD_TO_WIN32_HANDLE
+# define EIO_FD_TO_WIN32_HANDLE(fd) _get_osfhandle (fd)
+#endif
+#ifndef EIO_WIN32_HANDLE_TO_FD
+# define EIO_WIN32_HANDLE_TO_FD(handle) _open_osfhandle (handle, 0)
+#endif
+
+#define EIO_ERRNO(errval,retval) ((errno = errval), retval)
+
+#define EIO_ENOSYS() EIO_ERRNO (ENOSYS, -1)
+
 #ifdef _WIN32
 
-  /*doh*/
+  #define PAGESIZE 4096 /* GetSystemInfo? */
+
+  #define stat(path,buf)       _stati64 (path,buf)
+  #define lstat(path,buf)      stat (path,buf)
+  #define fstat(fd,buf)        _fstati64 (path,buf)
+  #define fsync(fd)            (FlushFileBuffers (EIO_FD_TO_WIN32_HANDLE (fd)) ? 0 : EIO_ERRNO (EBADF, -1))
+  #define mkdir(path,mode)     _mkdir (path)
+  #define link(old,neu)        (CreateHardLink (neu, old, 0) ? 0 : EIO_ERRNO (ENOENT, -1))
+
+  #define chown(path,uid,gid)  EIO_ENOSYS ()
+  #define fchown(fd,uid,gid)   EIO_ENOSYS ()
+  #define truncate(path,offs)  EIO_ENOSYS () /* far-miss: SetEndOfFile */
+  #define ftruncate(fd,offs)   EIO_ENOSYS () /* near-miss: SetEndOfFile */
+  #define mknod(path,mode,dev) EIO_ENOSYS ()
+  #define sync()               EIO_ENOSYS ()
+
+  /* we could even stat and see if it exists */
+  static int
+  symlink (const char *old, const char *neu)
+  {
+    if (CreateSymbolicLink (neu, old, 1))
+      return 0;
+
+    if (CreateSymbolicLink (neu, old, 0))
+      return 0;
+
+    return EIO_ERRNO (ENOENT, -1);
+  }
+
 #else
 
-# include <sys/time.h>
-# include <sys/select.h>
-# include <unistd.h>
-# include <utime.h>
-# include <signal.h>
-# include <dirent.h>
+  #include <sys/time.h>
+  #include <sys/select.h>
+  #include <sys/statvfs.h>
+  #include <unistd.h>
+  #include <utime.h>
+  #include <signal.h>
+  #include <dirent.h>
 
-#if _POSIX_MEMLOCK || _POSIX_MEMLOCK_RANGE || _POSIX_MAPPED_FILES
-# include <sys/mman.h>
-#endif
+  #if _POSIX_MEMLOCK || _POSIX_MEMLOCK_RANGE || _POSIX_MAPPED_FILES
+    #include <sys/mman.h>
+  #endif
 
-/* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
-# if __FreeBSD__ || defined __NetBSD__ || defined __OpenBSD__
-#  define _DIRENT_HAVE_D_TYPE /* sigh */
-#  define D_INO(de) (de)->d_fileno
-#  define D_NAMLEN(de) (de)->d_namlen
-# elif __linux || defined d_ino || _XOPEN_SOURCE >= 600
-#  define D_INO(de) (de)->d_ino
-# endif
+  /* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
+  #if __FreeBSD__ || defined __NetBSD__ || defined __OpenBSD__
+    #define _DIRENT_HAVE_D_TYPE /* sigh */
+    #define D_INO(de) (de)->d_fileno
+    #define D_NAMLEN(de) (de)->d_namlen
+  #elif __linux || defined d_ino || _XOPEN_SOURCE >= 600
+    #define D_INO(de) (de)->d_ino
+  #endif
 
-#ifdef _D_EXACT_NAMLEN
-# undef D_NAMLEN
-# define D_NAMLEN(de) _D_EXACT_NAMLEN (de)
-#endif
+  #ifdef _D_EXACT_NAMLEN
+    #undef D_NAMLEN
+    #define D_NAMLEN(de) _D_EXACT_NAMLEN (de)
+  #endif
 
-# ifdef _DIRENT_HAVE_D_TYPE
-#  define D_TYPE(de) (de)->d_type
-# endif
+  #ifdef _DIRENT_HAVE_D_TYPE
+    #define D_TYPE(de) (de)->d_type
+  #endif
 
-# ifndef EIO_STRUCT_DIRENT
-#  define EIO_STRUCT_DIRENT struct dirent
-# endif
+  #ifndef EIO_STRUCT_DIRENT
+    #define EIO_STRUCT_DIRENT struct dirent
+  #endif
 
 #endif
 
@@ -1044,7 +1084,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 
 # endif
 
-#elif defined (_WIN32)
+#elif defined (_WIN32) && 0
       /* does not work, just for documentation of what would need to be done */
       /* actually, cannot be done like this, as TransmitFile changes the file offset, */
       /* libeio guarantees that the file offset does not change, and windows */
@@ -1159,7 +1199,7 @@ eio_page_align (void **addr, size_t *length)
 }
 
 #if !_POSIX_MEMLOCK
-# define eio__mlockall(a) ((errno = ENOSYS), -1)
+# define eio__mlockall(a) eio_nosyscall()
 #else
 
 static int
@@ -1183,7 +1223,7 @@ eio__mlockall (int flags)
 #endif
 
 #if !_POSIX_MEMLOCK_RANGE
-# define eio__mlock(a,b) ((errno = ENOSYS), -1)
+# define eio__mlock(a,b) EIO_ENOSYS ()
 #else
 
 static int
@@ -1197,7 +1237,7 @@ eio__mlock (void *addr, size_t length)
 #endif
 
 #if !(_POSIX_MAPPED_FILES && _POSIX_SYNCHRONIZED_IO)
-# define eio__msync(a,b,c) ((errno = ENOSYS), -1)
+# define eio__msync(a,b,c) EIO_ENOSYS ()
 #else
 
 static int
