@@ -709,7 +709,7 @@ normal C<eio_cancel> call.
 Left alone, a group request will instantly move to the pending state and
 will be finished at the next call of C<eio_poll>.
 
-There usefulness stems from the fact that, if a subrequest is added to a
+The usefulness stems from the fact that, if a subrequest is added to a
 group I<before> a call to C<eio_poll>, via C<eio_grp_add>, then the group
 will not finish until all the subrequests have finished.
 
@@ -740,10 +740,10 @@ can return as "the load request".
 =item 2) open the file, maybe
 
 Next, open the file with C<eio_open> and add the request to the group
-request and you are finished steting up the request.
+request and you are finished setting up the request.
 
 If, for some reason, you cannot C<eio_open> (path is a null ptr?) you
-cna set C<< grp->result >> to C<-1> to signal an error and let the gorup
+can set C<< grp->result >> to C<-1> to signal an error and let the group
 request finish on its own.
 
 =item 3) open callback adds more requests
@@ -755,7 +755,7 @@ C<-1> to signal an error.
 Otherwise, malloc some memory or so and issue a read request, adding the
 read request to the group.
 
-=item 4) continue issuign requests till finished
+=item 4) continue issuing requests till finished
 
 In the real callback, check for errors and possibly continue with
 C<eio_close> or any other eio request in the same way.
