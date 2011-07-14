@@ -58,7 +58,12 @@ typedef int (*eio_cb)(eio_req *req);
 #endif
 
 #ifndef EIO_STRUCT_STAT
-# define EIO_STRUCT_STAT struct stat
+# ifdef _WIN32
+#  define EIO_STRUCT_STAT struct _stati64
+#  define EIO_STRUCT_STATI64
+# else
+#  define EIO_STRUCT_STAT struct stat
+# endif
 #endif
 
 #ifndef EIO_STRUCT_STATVFS

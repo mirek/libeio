@@ -100,9 +100,11 @@ static void eio_destroy (eio_req *req);
 
   #define PAGESIZE 4096 /* GetSystemInfo? */
 
-  #define stat(path,buf)       _stati64 (path,buf)
+  #ifdef EIO_STRUCT_STATI64
+    #define stat(path,buf)       _stati64 (path,buf)
+    #define fstat(fd,buf)        _fstati64 (path,buf)
+  #endif
   #define lstat(path,buf)      stat (path,buf)
-  #define fstat(fd,buf)        _fstati64 (path,buf)
   #define fsync(fd)            (FlushFileBuffers (EIO_FD_TO_WIN32_HANDLE (fd)) ? 0 : EIO_ERRNO (EBADF, -1))
   #define mkdir(path,mode)     _mkdir (path)
   #define link(old,neu)        (CreateHardLink (neu, old, 0) ? 0 : EIO_ERRNO (ENOENT, -1))
