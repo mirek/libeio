@@ -130,7 +130,7 @@ typedef pthread_t xthread_t;
 #endif
 
 #ifndef X_STACKSIZE
-# define X_STACKSIZE sizeof (long) * 4096
+# define X_STACKSIZE sizeof (void *) * 4096
 #endif
 
 static int

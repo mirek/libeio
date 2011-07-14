@@ -911,7 +911,7 @@ was written to use very little stackspace, but when using C<EIO_CUSTOM>
 requests, you might want to increase this.
 
 If this symbol is undefined (the default) then libeio will use its default
-stack size (C<sizeof (long) * 4096> currently).  If it is defined, but
+stack size (C<sizeof (void *) * 4096> currently). If it is defined, but
 C<0>, then the default operating system stack size will be used. In all
 other cases, the value must be an expression that evaluates to the desired
 stack size.

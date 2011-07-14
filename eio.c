@@ -880,10 +880,10 @@ int eio_poll (void)
 # define pread  eio__pread
 # define pwrite eio__pwrite
 
-static ssize_t
+static eio_ssize_t
 eio__pread (int fd, void *buf, size_t count, off_t offset)
 {
-  ssize_t res;
+  eio_ssize_t res;
   off_t ooffset;
 
   X_LOCK (preadwritelock);
@@ -896,10 +896,10 @@ eio__pread (int fd, void *buf, size_t count, off_t offset)
   return res;
 }
 
-static ssize_t
+static eio_ssize_t
 eio__pwrite (int fd, void *buf, size_t count, off_t offset)
 {
-  ssize_t res;
+  eio_ssize_t res;
   off_t ooffset;
 
   X_LOCK (preadwritelock);
@@ -998,7 +998,7 @@ eio__fallocate (int fd, int mode, off_t offset, size_t len)
 # undef readahead
 # define readahead(fd,offset,count) eio__readahead (fd, offset, count, self)
 
-static ssize_t
+static eio_ssize_t
 eio__readahead (int fd, off_t offset, size_t count, etp_worker *self)
 {
   size_t todo = count;
@@ -1020,11 +1020,11 @@ eio__readahead (int fd, off_t offset, size_t count, etp_worker *self)
 #endif
 
 /* sendfile always needs emulation */
-static ssize_t
+static eio_ssize_t
 eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 {
-  ssize_t written = 0;
-  ssize_t res;
+  eio_ssize_t written = 0;
+  eio_ssize_t res;
 
   if (!count)
     return 0;
@@ -1143,7 +1143,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 
       while (count)
         {
-          ssize_t cnt;
+          eio_ssize_t cnt;
           
           cnt = pread (ifd, eio_buf, count > EIO_BUFSIZE ? EIO_BUFSIZE : count, offset);
 
@@ -1361,7 +1361,7 @@ eio__realpath (eio_req *req, etp_worker *self)
 
   while (*rel)
     {
-      ssize_t len, linklen;
+      eio_ssize_t len, linklen;
       char *beg = rel;
 
       while (*rel && *rel != '/')
@@ -2182,7 +2182,7 @@ eio_req *eio_fchmod (int fd, mode_t mode, int pri, eio_cb cb, void *data)
   REQ (EIO_FCHMOD); req->int1 = fd; req->int2 = (long)mode; SEND;
 }
 
-eio_req *eio_fchown (int fd, uid_t uid, gid_t gid, int pri, eio_cb cb, void *data)
+eio_req *eio_fchown (int fd, eio_uid_t uid, eio_gid_t gid, int pri, eio_cb cb, void *data)
 {
   REQ (EIO_FCHOWN); req->int1 = fd; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
 }
@@ -2212,7 +2212,7 @@ eio_req *eio_truncate (const char *path, off_t offset, int pri, eio_cb cb, void 
   REQ (EIO_TRUNCATE); PATH; req->offs = offset; SEND;
 }
 
-eio_req *eio_chown (const char *path, uid_t uid, gid_t gid, int pri, eio_cb cb, void *data)
+eio_req *eio_chown (const char *path, eio_uid_t uid, eio_gid_t gid, int pri, eio_cb cb, void *data)
 {
   REQ (EIO_CHOWN); PATH; req->int2 = (long)uid; req->int3 = (long)gid; SEND;
 }
@@ -2369,11 +2369,11 @@ eio_grp_add (eio_req *grp, eio_req *req)
 /*****************************************************************************/
 /* misc garbage */
 
-ssize_t
+eio_ssize_t
 eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count)
 {
   etp_worker wrk;
-  ssize_t ret;
+  eio_ssize_t ret;
 
   wrk.dbuf = 0;
 

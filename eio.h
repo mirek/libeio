@@ -66,6 +66,16 @@ typedef int (*eio_cb)(eio_req *req);
 # endif
 #endif
 
+#ifdef _WIN32
+typedef int      eio_uid_t;
+typedef int      eio_gid_t;
+typedef intptr_t eio_ssize_t; /* or SSIZE_T */
+#else
+typedef uid_t    eio_uid_t;
+typedef gid_t    eio_gid_t;
+typedef ssize_t  eio_ssize_t;
+#endif
+
 #ifndef EIO_STRUCT_STATVFS
 # define EIO_STRUCT_STATVFS struct statvfs
 #endif
@@ -191,7 +201,7 @@ struct eio_req
 {
   eio_req volatile *next; /* private ETP */
 
-  ssize_t result;  /* result of syscall, e.g. result = read (... */
+  eio_ssize_t result;  /* result of syscall, e.g. result = read (... */
   off_t offs;      /* read, write, truncate, readahead, sync_file_range, fallocate: file offset, mknod: dev_t */
   size_t size;     /* read, write, readahead, sendfile, msync, mlock, sync_file_range, fallocate: length */
   void *ptr1;      /* all applicable requests: pathname, old name; readdir: optional eio_dirents */
@@ -341,7 +351,7 @@ void eio_cancel (eio_req *req);
 /*****************************************************************************/
 /* convenience functions */
 
-ssize_t eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count);
+eio_ssize_t eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count);
 
 #ifdef __cplusplus
 }
