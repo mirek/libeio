@@ -60,7 +60,6 @@
 #include <fcntl.h>
 #include <assert.h>
 
-#include <sys/statvfs.h>
 /* intptr_t comes from unistd.h, says POSIX/UNIX/tradition */
 /* intptr_t only comes from stdint.h, says idiot openbsd coder */
 #if HAVE_STDINT_H
@@ -1201,7 +1200,7 @@ eio_page_align (void **addr, size_t *length)
 }
 
 #if !_POSIX_MEMLOCK
-# define eio__mlockall(a) eio_nosyscall()
+# define eio__mlockall(a) EIO_ENOSYS ()
 #else
 
 static int
