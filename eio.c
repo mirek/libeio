@@ -69,6 +69,9 @@
 #ifndef ECANCELED
 # define ECANCELED EDOM
 #endif
+#ifndef ELOOP
+# define ELOOP EDOM
+#endif
 
 static void eio_destroy (eio_req *req);
 
@@ -97,6 +100,7 @@ static void eio_destroy (eio_req *req);
 
 #ifdef _WIN32
 
+  #undef PAGESIZE
   #define PAGESIZE 4096 /* GetSystemInfo? */
 
   #ifdef EIO_STRUCT_STATI64
@@ -104,29 +108,45 @@ static void eio_destroy (eio_req *req);
     #define fstat(fd,buf)        _fstati64 (path,buf)
   #endif
   #define lstat(path,buf)      stat (path,buf)
-  #define fsync(fd)            (FlushFileBuffers (EIO_FD_TO_WIN32_HANDLE (fd)) ? 0 : EIO_ERRNO (EBADF, -1))
+  #define fsync(fd)            (FlushFileBuffers ((HANDLE)EIO_FD_TO_WIN32_HANDLE (fd)) ? 0 : EIO_ERRNO (EBADF, -1))
   #define mkdir(path,mode)     _mkdir (path)
   #define link(old,neu)        (CreateHardLink (neu, old, 0) ? 0 : EIO_ERRNO (ENOENT, -1))
 
+  #define chmod(path,mode)     _chmod (path, mode)
+  #define fchmod(fd,mode)      EIO_ENOSYS ()
   #define chown(path,uid,gid)  EIO_ENOSYS ()
   #define fchown(fd,uid,gid)   EIO_ENOSYS ()
   #define truncate(path,offs)  EIO_ENOSYS () /* far-miss: SetEndOfFile */
   #define ftruncate(fd,offs)   EIO_ENOSYS () /* near-miss: SetEndOfFile */
   #define mknod(path,mode,dev) EIO_ENOSYS ()
   #define sync()               EIO_ENOSYS ()
+  #define readlink(path,buf,s) EIO_ENOSYS ()
+  #define statvfs(path,buf)    EIO_ENOSYS ()
+  #define fstatvfs(fd,buf)     EIO_ENOSYS ()
 
   /* we could even stat and see if it exists */
   static int
   symlink (const char *old, const char *neu)
   {
-    if (CreateSymbolicLink (neu, old, 1))
-      return 0;
+    #if WINVER >= 0x0600
+      if (CreateSymbolicLink (neu, old, 1))
+        return 0;
 
-    if (CreateSymbolicLink (neu, old, 0))
-      return 0;
+      if (CreateSymbolicLink (neu, old, 0))
+        return 0;
+    #endif
 
     return EIO_ERRNO (ENOENT, -1);
   }
+
+  /* POSIX API only */
+  #define CreateHardLink(neu,old) 0
+  #define CreateSymbolicLink(neu,old,flags) 0
+
+  struct statvfs
+  {
+    int dummy;
+  };
 
 #else
 
@@ -1128,7 +1148,9 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
 #ifdef ENOTSUP /* sigh, if the steenking pile called openbsd would only try to at least compile posix code... */
           || errno == ENOTSUP
 #endif
+#ifdef EOPNOTSUPP /* windows */
           || errno == EOPNOTSUPP /* BSDs */
+#endif
 #if __solaris
           || errno == EAFNOSUPPORT || errno == EPROTOTYPE
 #endif
