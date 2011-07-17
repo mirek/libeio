@@ -1653,19 +1653,32 @@ eio__scandir (eio_req *req, etp_worker *self)
 
 #ifdef _WIN32
   {
+    int len = strlen ((const char *)req->ptr1);
     char *path = malloc (MAX_PATH);
-    _snprintf (path, MAX_PATH, "%s/*", (const char *)req->ptr1);
+    const char *fmt;
+
+    if (!len)
+      fmt = "./*";
+    else if (((const char *)req->ptr1)[len - 1] == '/' || ((const char *)req->ptr1)[len - 1] == '\\')
+      fmt = "%s*";
+    else
+      fmt = "%s/*";
+
+    _snprintf (path, MAX_PATH, fmt, (const char *)req->ptr1);
     dirp = FindFirstFile (path, &entp);
     free (path);
 
-    if (!dirp)
-      {
+    if (dirp == INVALID_HANDLE_VALUE)
+     {
+       dirp = 0;
+
         switch (GetLastError ())
           {
             case ERROR_FILE_NOT_FOUND:
               req->result = 0;
               break;
 
+            case ERROR_INVALID_NAME:
             case ERROR_PATH_NOT_FOUND:
             case ERROR_NO_MORE_FILES:
               errno = ENOENT;
@@ -1679,8 +1692,7 @@ eio__scandir (eio_req *req, etp_worker *self)
               errno = EINVAL;
               break;
           }
-
-      }
+     }
   }
 #else
   dirp = opendir (req->ptr1);
@@ -1696,17 +1708,17 @@ eio__scandir (eio_req *req, etp_worker *self)
   if (dirp && names && (!flags || dents))
     for (;;)
       {
-        int more;
+        int done;
 
 #ifdef _WIN32
-        more = dirp;
+        done = !dirp;
 #else
         errno = 0;
         entp = readdir (dirp);
-        more = entp;
+        done = !entp;
 #endif
 
-        if (!more)
+        if (done)
           {
 #ifndef _WIN32
             int old_errno = errno;
