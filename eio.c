@@ -113,6 +113,9 @@ static void eio_destroy (eio_req *req);
   #define link(old,neu)        (CreateHardLink (neu, old, 0) ? 0 : EIO_ERRNO (ENOENT, -1))
 
   #define chmod(path,mode)     _chmod (path, mode)
+  #define dup(fd)              _dup (fd)
+  #define dup2(fd1,fd2)        _dup2 (fd1, fd2)
+
   #define fchmod(fd,mode)      EIO_ENOSYS ()
   #define chown(path,uid,gid)  EIO_ENOSYS ()
   #define fchown(fd,uid,gid)   EIO_ENOSYS ()
@@ -140,13 +143,18 @@ static void eio_destroy (eio_req *req);
   }
 
   /* POSIX API only */
-  #define CreateHardLink(neu,old) 0
+  #define CreateHardLink(neu,old,flags) 0
   #define CreateSymbolicLink(neu,old,flags) 0
 
   struct statvfs
   {
     int dummy;
   };
+
+  #define DT_DIR EIO_DT_DIR
+  #define DT_REG EIO_DT_REG
+  #define D_NAME(entp) entp.cFileName
+  #define D_TYPE(entp) (entp.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? DT_DIR : DT_REG)
 
 #else
 
@@ -161,6 +169,8 @@ static void eio_destroy (eio_req *req);
   #if _POSIX_MEMLOCK || _POSIX_MEMLOCK_RANGE || _POSIX_MAPPED_FILES
     #include <sys/mman.h>
   #endif
+
+  #define D_NAME(entp) entp->d_name
 
   /* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
   #if __FreeBSD__ || defined __NetBSD__ || defined __OpenBSD__
@@ -208,7 +218,7 @@ static void eio_destroy (eio_req *req);
 # define D_INO(de) 0
 #endif
 #ifndef D_NAMLEN
-# define D_NAMLEN(de) strlen ((de)->d_name)
+# define D_NAMLEN(entp) strlen (D_NAME (entp))
 #endif
 
 /* used for struct dirent, AIX doesn't provide it */
@@ -252,17 +262,10 @@ static void eio_execute (struct etp_worker *self, eio_req *req);
     {				\
       free (wrk->dbuf);		\
       wrk->dbuf = 0;		\
-    }				\
-				\
-  if (wrk->dirp)		\
-    {				\
-      closedir (wrk->dirp);	\
-      wrk->dirp = 0;		\
     }
 
 #define ETP_WORKER_COMMON \
-  void *dbuf;	\
-  DIR *dirp;
+  void *dbuf;
 
 /*****************************************************************************/
 
@@ -398,6 +401,17 @@ typedef struct {
 static etp_reqq req_queue;
 static etp_reqq res_queue;
 
+static void ecb_noinline ecb_cold
+reqq_init (etp_reqq *q)
+{
+  int pri;
+
+  for (pri = 0; pri < ETP_NUM_PRI; ++pri)
+    q->qs[pri] = q->qe[pri] = 0;
+
+  q->size = 0;
+}
+
 static int ecb_noinline
 reqq_push (etp_reqq *q, ETP_REQ *req)
 {
@@ -454,36 +468,13 @@ etp_thread_init (void)
 }
 
 static void ecb_cold
-etp_atfork_prepare (void)
-{
-}
-
-static void ecb_cold
-etp_atfork_parent (void)
-{
-}
-
-static void ecb_cold
 etp_atfork_child (void)
 {
-  ETP_REQ *prv;
+  reqq_init (&req_queue);
+  reqq_init (&res_queue);
 
-  while ((prv = reqq_shift (&req_queue)))
-    ETP_DESTROY (prv);
-
-  while ((prv = reqq_shift (&res_queue)))
-    ETP_DESTROY (prv);
-
-  while (wrk_first.next != &wrk_first)
-    {
-      etp_worker *wrk = wrk_first.next;
-
-      if (wrk->req)
-        ETP_DESTROY (wrk->req);
-
-      etp_worker_clear (wrk);
-      etp_worker_free (wrk);
-    }
+  wrk_first.next =
+  wrk_first.prev = &wrk_first;
 
   started  = 0;
   idle     = 0;
@@ -498,7 +489,7 @@ static void ecb_cold
 etp_once_init (void)
 {
   etp_thread_init ();
-  X_THREAD_ATFORK (etp_atfork_prepare, etp_atfork_parent, etp_atfork_child);
+  X_THREAD_ATFORK (0, 0, etp_atfork_child);
 }
 
 static int ecb_cold
@@ -1485,9 +1476,9 @@ eio_dent_cmp (const eio_dirent *a, const eio_dirent *b)
 #define EIO_SORT_FAST   60 /* when to only use insertion sort */
 
 static void
-eio_dent_radix_sort (eio_dirent *dents, int size, signed char score_bits, ino_t inode_bits)
+eio_dent_radix_sort (eio_dirent *dents, int size, signed char score_bits, eio_ino_t inode_bits)
 {
-  unsigned char bits [9 + sizeof (ino_t) * 8];
+  unsigned char bits [9 + sizeof (eio_ino_t) * 8];
   unsigned char *bit = bits;
 
   assert (CHAR_BIT == 8);
@@ -1499,27 +1490,27 @@ eio_dent_radix_sort (eio_dirent *dents, int size, signed char score_bits, ino_t 
     return;
 
   /* first prepare an array of bits to test in our radix sort */
-  /* try to take endianness into account, as well as differences in ino_t sizes */
+  /* try to take endianness into account, as well as differences in eio_ino_t sizes */
   /* inode_bits must contain all inodes ORed together */
   /* which is used to skip bits that are 0 everywhere, which is very common */
   {
-    ino_t endianness;
+    eio_ino_t endianness;
     int i, j;
 
     /* we store the byte offset of byte n into byte n of "endianness" */
-    for (i = 0; i < sizeof (ino_t); ++i)
+    for (i = 0; i < sizeof (eio_ino_t); ++i)
       ((unsigned char *)&endianness)[i] = i;
 
     *bit++ = 0;
 
-    for (i = 0; i < sizeof (ino_t); ++i)
+    for (i = 0; i < sizeof (eio_ino_t); ++i)
       {
         /* shifting off the byte offsets out of "endianness" */
         int offs = (offsetof (eio_dirent, inode) + (endianness & 0xff)) * 8;
         endianness >>= 8;
 
         for (j = 0; j < 8; ++j)
-          if (inode_bits & (((ino_t)1) << (i * 8 + j)))
+          if (inode_bits & (((eio_ino_t)1) << (i * 8 + j)))
             *bit++ = offs + j;
       }
 
@@ -1530,9 +1521,9 @@ eio_dent_radix_sort (eio_dirent *dents, int size, signed char score_bits, ino_t 
 
   /* now actually do the sorting (a variant of MSD radix sort) */
   {
-    eio_dirent    *base_stk [9 + sizeof (ino_t) * 8], *base;
-    eio_dirent    *end_stk  [9 + sizeof (ino_t) * 8], *end;
-    unsigned char *bit_stk  [9 + sizeof (ino_t) * 8];
+    eio_dirent    *base_stk [9 + sizeof (eio_ino_t) * 8], *base;
+    eio_dirent    *end_stk  [9 + sizeof (eio_ino_t) * 8], *end;
+    unsigned char *bit_stk  [9 + sizeof (eio_ino_t) * 8];
     int stk_idx = 0;
 
     base_stk [stk_idx] = dents;
@@ -1621,7 +1612,7 @@ eio_dent_insertion_sort (eio_dirent *dents, int size)
 }
 
 static void
-eio_dent_sort (eio_dirent *dents, int size, signed char score_bits, ino_t inode_bits)
+eio_dent_sort (eio_dirent *dents, int size, signed char score_bits, eio_ino_t inode_bits)
 {
   if (size <= 1)
     return; /* our insertion sort relies on size > 0 */
@@ -1639,25 +1630,61 @@ eio_dent_sort (eio_dirent *dents, int size, signed char score_bits, ino_t inode_
 static void
 eio__scandir (eio_req *req, etp_worker *self)
 {
-  DIR *dirp;
-  EIO_STRUCT_DIRENT *entp;
   char *name, *names;
-  int namesalloc = 4096;
+  int namesalloc = 4096 - sizeof (void *) * 4;
   int namesoffs = 0;
   int flags = req->int1;
   eio_dirent *dents = 0;
   int dentalloc = 128;
   int dentoffs = 0;
-  ino_t inode_bits = 0;
+  eio_ino_t inode_bits = 0;
+#ifdef _WIN32
+  HANDLE dirp;
+  WIN32_FIND_DATA entp;
+#else
+  DIR *dirp;
+  EIO_STRUCT_DIRENT *entp;
+#endif
 
   req->result = -1;
 
   if (!(flags & EIO_READDIR_DENTS))
     flags &= ~(EIO_READDIR_DIRS_FIRST | EIO_READDIR_STAT_ORDER);
 
-  X_LOCK (wrklock);
-  /* the corresponding closedir is in ETP_WORKER_CLEAR */
-  self->dirp = dirp = opendir (req->ptr1);
+#ifdef _WIN32
+  {
+    char *path = malloc (MAX_PATH);
+    _snprintf (path, MAX_PATH, "%s/*", (const char *)req->ptr1);
+    dirp = FindFirstFile (path, &entp);
+    free (path);
+
+    if (!dirp)
+      {
+        switch (GetLastError ())
+          {
+            case ERROR_FILE_NOT_FOUND:
+              req->result = 0;
+              break;
+
+            case ERROR_PATH_NOT_FOUND:
+            case ERROR_NO_MORE_FILES:
+              errno = ENOENT;
+              break;
+
+            case ERROR_NOT_ENOUGH_MEMORY:
+              errno = ENOMEM;
+              break;
+
+            default:
+              errno = EINVAL;
+              break;
+          }
+
+      }
+  }
+#else
+  dirp = opendir (req->ptr1);
+#endif
 
   if (req->flags & EIO_FLAG_PTR1_FREE)
     free (req->ptr1);
@@ -1665,18 +1692,30 @@ eio__scandir (eio_req *req, etp_worker *self)
   req->flags |= EIO_FLAG_PTR1_FREE | EIO_FLAG_PTR2_FREE;
   req->ptr1 = dents = flags ? malloc (dentalloc * sizeof (eio_dirent)) : 0;
   req->ptr2 = names = malloc (namesalloc);
-  X_UNLOCK (wrklock);
 
   if (dirp && names && (!flags || dents))
     for (;;)
       {
+        int more;
+
+#ifdef _WIN32
+        more = dirp;
+#else
         errno = 0;
         entp = readdir (dirp);
+        more = entp;
+#endif
 
-        if (!entp)
+        if (!more)
           {
+#ifndef _WIN32
+            int old_errno = errno;
+            closedir (dirp);
+            errno = old_errno;
+
             if (errno)
               break;
+#endif
 
             /* sort etc. */
             req->int1   = flags;
@@ -1715,7 +1754,7 @@ eio__scandir (eio_req *req, etp_worker *self)
           }
 
         /* now add the entry to our list(s) */
-        name = entp->d_name;
+        name = D_NAME (entp);
 
         /* skip . and .. entries */
         if (name [0] != '.' || (name [1] && (name [1] != '.' || name [2])))
@@ -1725,9 +1764,7 @@ eio__scandir (eio_req *req, etp_worker *self)
             while (ecb_expect_false (namesoffs + len > namesalloc))
               {
                 namesalloc *= 2;
-                X_LOCK (wrklock);
                 req->ptr2 = names = realloc (names, namesalloc);
-                X_UNLOCK (wrklock);
 
                 if (!names)
                   break;
@@ -1742,9 +1779,7 @@ eio__scandir (eio_req *req, etp_worker *self)
                 if (ecb_expect_false (dentoffs == dentalloc))
                   {
                     dentalloc *= 2;
-                    X_LOCK (wrklock);
                     req->ptr1 = dents = realloc (dents, dentalloc * sizeof (eio_dirent));
-                    X_UNLOCK (wrklock);
 
                     if (!dents)
                       break;
@@ -1834,6 +1869,14 @@ eio__scandir (eio_req *req, etp_worker *self)
             errno = ECANCELED;
             break;
           }
+
+#ifdef _WIN32
+        if (!FindNextFile (dirp, &entp))
+          {
+            FindClose (dirp);
+            dirp = 0;
+          }
+#endif
       }
 }
 
@@ -1859,7 +1902,6 @@ X_THREAD_PROC (etp_proc)
   ETP_REQ *req;
   struct timespec ts;
   etp_worker *self = (etp_worker *)thr_arg;
-  int timeout;
 
   /* try to distribute timeouts somewhat evenly */
   ts.tv_nsec = ((unsigned long)self & 1023UL) * (1000000000UL / 1024UL);

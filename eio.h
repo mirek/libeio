@@ -67,13 +67,19 @@ typedef int (*eio_cb)(eio_req *req);
 #endif
 
 #ifdef _WIN32
-typedef int      eio_uid_t;
-typedef int      eio_gid_t;
-typedef intptr_t eio_ssize_t; /* or SSIZE_T */
+  typedef int      eio_uid_t;
+  typedef int      eio_gid_t;
+  typedef intptr_t eio_ssize_t; /* or SSIZE_T */
+  #if __GNUC__
+    typedef long long eio_ino_t;
+  #else
+    typedef __int64   eio_ino_t; /* unsigned not supported by msvc */
+  #endif
 #else
-typedef uid_t    eio_uid_t;
-typedef gid_t    eio_gid_t;
-typedef ssize_t  eio_ssize_t;
+  typedef uid_t    eio_uid_t;
+  typedef gid_t    eio_gid_t;
+  typedef ssize_t  eio_ssize_t;
+  typedef ino_t    eio_ino_t;
 #endif
 
 #ifndef EIO_STRUCT_STATVFS
@@ -122,7 +128,7 @@ struct eio_dirent
   unsigned short namelen; /* size of filename without trailing 0 */
   unsigned char type; /* one of EIO_DT_* */
   signed char score; /* internal use */
-  ino_t inode; /* the inode number, if available, otherwise unspecified */
+  eio_ino_t inode; /* the inode number, if available, otherwise unspecified */
 };
 
 /* eio_msync flags */
