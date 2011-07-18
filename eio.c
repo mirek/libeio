@@ -304,7 +304,7 @@ static xcond_t  reqwait;
  * normal read/write by using a mutex. slows down execution a lot,
  * but that's your problem, not mine.
  */
-static xmutex_t preadwritelock = X_MUTEX_INIT;
+static xmutex_t preadwritelock;
 #endif
 
 typedef struct etp_worker
@@ -320,7 +320,7 @@ typedef struct etp_worker
   ETP_WORKER_COMMON
 } etp_worker;
 
-static etp_worker wrk_first = { &wrk_first, &wrk_first, 0 }; /* NOT etp */
+static etp_worker wrk_first; /* NOT etp */
 
 #define ETP_WORKER_LOCK(wrk)   X_LOCK   (wrklock)
 #define ETP_WORKER_UNLOCK(wrk) X_UNLOCK (wrklock)
@@ -455,21 +455,14 @@ reqq_shift (etp_reqq *q)
   abort ();
 }
 
-static void ecb_cold
-etp_thread_init (void)
+static int ecb_cold
+etp_init (void (*want_poll)(void), void (*done_poll)(void))
 {
-#if !HAVE_PREADWRITE
-  X_MUTEX_CREATE (preadwritelock);
-#endif
   X_MUTEX_CREATE (wrklock);
   X_MUTEX_CREATE (reslock);
   X_MUTEX_CREATE (reqlock);
   X_COND_CREATE  (reqwait);
-}
 
-static void ecb_cold
-etp_atfork_child (void)
-{
   reqq_init (&req_queue);
   reqq_init (&res_queue);
 
@@ -481,23 +474,6 @@ etp_atfork_child (void)
   nreqs    = 0;
   nready   = 0;
   npending = 0;
-
-  etp_thread_init ();
-}
-
-static void ecb_cold
-etp_once_init (void)
-{
-  etp_thread_init ();
-  X_THREAD_ATFORK (0, 0, etp_atfork_child);
-}
-
-static int ecb_cold
-etp_init (void (*want_poll)(void), void (*done_poll)(void))
-{
-  static pthread_once_t doinit = PTHREAD_ONCE_INIT;
-
-  pthread_once (&doinit, etp_once_init);
 
   want_poll_cb = want_poll;
   done_poll_cb = done_poll;
@@ -1993,6 +1969,10 @@ quit:
 int ecb_cold
 eio_init (void (*want_poll)(void), void (*done_poll)(void))
 {
+#if !HAVE_PREADWRITE
+  X_MUTEX_CREATE (preadwritelock);
+#endif
+
   return etp_init (want_poll, done_poll);
 }
 
