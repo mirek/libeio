@@ -235,13 +235,13 @@ static void eio_destroy (eio_req *req);
 #define EIO_BUFSIZE 65536
 
 #define dBUF	 				\
-  char *eio_buf;				\
-  ETP_WORKER_LOCK (self);			\
-  self->dbuf = eio_buf = malloc (EIO_BUFSIZE);	\
-  ETP_WORKER_UNLOCK (self);			\
+  char *eio_buf = malloc (EIO_BUFSIZE);		\
   errno = ENOMEM;				\
   if (!eio_buf)					\
-    return -1;
+    return -1
+
+#define FUBd					\
+  free (eio_buf)
 
 #define EIO_TICKS ((1000000 + 1023) >> 10)
 
@@ -256,16 +256,6 @@ static int eio_finish (eio_req *req);
 #define ETP_FINISH(req)  eio_finish (req)
 static void eio_execute (struct etp_worker *self, eio_req *req);
 #define ETP_EXECUTE(wrk,req) eio_execute (wrk,req)
-
-#define ETP_WORKER_CLEAR(req)	\
-  if (wrk->dbuf)		\
-    {				\
-      free (wrk->dbuf);		\
-      wrk->dbuf = 0;		\
-    }
-
-#define ETP_WORKER_COMMON \
-  void *dbuf;
 
 /*****************************************************************************/
 
@@ -317,7 +307,9 @@ typedef struct etp_worker
   /* locked by reslock, reqlock or wrklock */
   ETP_REQ *req; /* currently processed request */
 
+#ifdef ETP_WORKER_COMMON
   ETP_WORKER_COMMON
+#endif
 } etp_worker;
 
 static etp_worker wrk_first; /* NOT etp */
@@ -330,7 +322,6 @@ static etp_worker wrk_first; /* NOT etp */
 static void ecb_cold
 etp_worker_clear (etp_worker *wrk)
 {
-  ETP_WORKER_CLEAR (wrk);
 }
 
 static void ecb_cold
@@ -999,6 +990,8 @@ eio__readahead (int fd, off_t offset, size_t count, etp_worker *self)
       todo   -= len;
     }
 
+  FUBd;
+
   errno = 0;
   return count;
 }
@@ -1007,7 +1000,7 @@ eio__readahead (int fd, off_t offset, size_t count, etp_worker *self)
 
 /* sendfile always needs emulation */
 static eio_ssize_t
-eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
+eio__sendfile (int ofd, int ifd, off_t offset, size_t count)
 {
   eio_ssize_t written = 0;
   eio_ssize_t res;
@@ -1153,6 +1146,8 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count, etp_worker *self)
           res    += cnt;
           count  -= cnt;
         }
+
+      FUBd;
     }
 
   return res;
@@ -2027,7 +2022,7 @@ eio_execute (etp_worker *self, eio_req *req)
                                       : write     (req->int1, req->ptr2, req->size); break;
 
       case EIO_READAHEAD: req->result = readahead     (req->int1, req->offs, req->size); break;
-      case EIO_SENDFILE:  req->result = eio__sendfile (req->int1, req->int2, req->offs, req->size, self); break;
+      case EIO_SENDFILE:  req->result = eio__sendfile (req->int1, req->int2, req->offs, req->size); break;
 
       case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
                           req->result = stat      (req->ptr1, (EIO_STRUCT_STAT *)req->ptr2); break;
@@ -2427,16 +2422,6 @@ eio_grp_add (eio_req *grp, eio_req *req)
 eio_ssize_t
 eio_sendfile_sync (int ofd, int ifd, off_t offset, size_t count)
 {
-  etp_worker wrk;
-  eio_ssize_t ret;
-
-  wrk.dbuf = 0;
-
-  ret = eio__sendfile (ofd, ifd, offset, count, &wrk);
-
-  if (wrk.dbuf)
-    free (wrk.dbuf);
-
-  return ret;
+  return eio__sendfile (ofd, ifd, offset, count);
 }
 
