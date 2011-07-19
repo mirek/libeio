@@ -303,13 +303,13 @@ eio_req *eio_fstatvfs  (int fd, int pri, eio_cb cb, void *data); /* stat buffer=
 eio_req *eio_futime    (int fd, eio_tstamp atime, eio_tstamp mtime, int pri, eio_cb cb, void *data);
 eio_req *eio_ftruncate (int fd, off_t offset, int pri, eio_cb cb, void *data);
 eio_req *eio_fchmod    (int fd, mode_t mode, int pri, eio_cb cb, void *data);
-eio_req *eio_fchown    (int fd, uid_t uid, gid_t gid, int pri, eio_cb cb, void *data);
+eio_req *eio_fchown    (int fd, eio_uid_t uid, eio_gid_t gid, int pri, eio_cb cb, void *data);
 eio_req *eio_dup2      (int fd, int fd2, int pri, eio_cb cb, void *data);
 eio_req *eio_sendfile  (int out_fd, int in_fd, off_t in_offset, size_t length, int pri, eio_cb cb, void *data);
 eio_req *eio_open      (const char *path, int flags, mode_t mode, int pri, eio_cb cb, void *data);
 eio_req *eio_utime     (const char *path, eio_tstamp atime, eio_tstamp mtime, int pri, eio_cb cb, void *data);
 eio_req *eio_truncate  (const char *path, off_t offset, int pri, eio_cb cb, void *data);
-eio_req *eio_chown     (const char *path, uid_t uid, gid_t gid, int pri, eio_cb cb, void *data);
+eio_req *eio_chown     (const char *path, eio_uid_t uid, eio_gid_t gid, int pri, eio_cb cb, void *data);
 eio_req *eio_chmod     (const char *path, mode_t mode, int pri, eio_cb cb, void *data);
 eio_req *eio_mkdir     (const char *path, mode_t mode, int pri, eio_cb cb, void *data);
 eio_req *eio_readdir   (const char *path, int flags, int pri, eio_cb cb, void *data); /* result=ptr2 allocated dynamically */
