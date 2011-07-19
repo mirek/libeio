@@ -32,7 +32,6 @@
 #define pthread_sigmask(a,b,c)
 #define sigaddset(a,b)
 #define sigemptyset(s)
-#define sigfillset(s)
 
 typedef pthread_mutex_t xmutex_t;
 #define X_MUTEX_INIT           PTHREAD_MUTEX_INITIALIZER
