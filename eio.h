@@ -69,7 +69,7 @@ typedef int (*eio_cb)(eio_req *req);
 #ifdef _WIN32
   typedef int      eio_uid_t;
   typedef int      eio_gid_t;
-  #ifdef _MINGW32_ /* no intptr_t */
+  #ifdef __MINGW32__ /* no intptr_t */
     typedef ssize_t  eio_ssize_t;
   #else
     typedef intptr_t eio_ssize_t; /* or SSIZE_T */

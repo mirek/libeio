@@ -166,7 +166,6 @@ static void eio_destroy (eio_req *req);
   #include <sys/select.h>
   #include <sys/statvfs.h>
   #include <unistd.h>
-  #include <utime.h>
   #include <signal.h>
   #include <dirent.h>
 
@@ -198,6 +197,10 @@ static void eio_destroy (eio_req *req);
     #define EIO_STRUCT_DIRENT struct dirent
   #endif
 
+#endif
+
+#if HAVE_UTIMES
+# include <utime.h>
 #endif
 
 #if HAVE_SENDFILE
