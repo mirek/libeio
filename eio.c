@@ -73,6 +73,10 @@
 # define ELOOP EDOM
 #endif
 
+#if !defined(ENOTSOCK) && defined(WSAENOTSOCK)
+# define ENOTSOCK WSAENOTSOCK
+#endif
+
 static void eio_destroy (eio_req *req);
 
 #ifndef EIO_FINISH
@@ -105,7 +109,7 @@ static void eio_destroy (eio_req *req);
 
   #ifdef EIO_STRUCT_STATI64
     #define stat(path,buf)       _stati64 (path,buf)
-    #define fstat(fd,buf)        _fstati64 (path,buf)
+    #define fstat(fd,buf)        _fstati64 (fd,buf)
   #endif
   #define lstat(path,buf)      stat (path,buf)
   #define fsync(fd)            (FlushFileBuffers ((HANDLE)EIO_FD_TO_WIN32_HANDLE (fd)) ? 0 : EIO_ERRNO (EBADF, -1))
