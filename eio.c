@@ -203,6 +203,14 @@ static void eio_destroy (eio_req *req);
 # include <utime.h>
 #endif
 
+#if HAVE_SYS_SYSCALL_H
+# include <sys/syscall.h>
+#endif
+
+#if HAVE_SYS_PRCTL_H
+# include <sys/prctl.h>
+#endif
+
 #if HAVE_SENDFILE
 # if __linux
 #  include <sys/sendfile.h>
@@ -216,10 +224,6 @@ static void eio_destroy (eio_req *req);
 # else
 #  error sendfile support requested but not available
 # endif
-#endif
-
-#if HAVE_SYS_SYSCALL_H
-# include <sys/syscall.h>
 #endif
 
 #ifndef D_TYPE
@@ -1914,6 +1918,10 @@ X_THREAD_PROC (etp_proc)
   ETP_REQ *req;
   struct timespec ts;
   etp_worker *self = (etp_worker *)thr_arg;
+
+#if HAVE_PRCTL_SET_NAME
+  prctl (PR_SET_NAME, (unsigned long)"eio_thread", 0, 0, 0);
+#endif
 
   /* try to distribute timeouts somewhat evenly */
   ts.tv_nsec = ((unsigned long)self & 1023UL) * (1000000000UL / 1024UL);
