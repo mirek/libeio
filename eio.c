@@ -218,6 +218,10 @@ static void eio_destroy (eio_req *req);
 # endif
 #endif
 
+#if HAVE_SYS_SYSCALL_H
+# include <sys/syscall.h>
+#endif
+
 #ifndef D_TYPE
 # define D_TYPE(de) 0
 #endif
@@ -938,6 +942,24 @@ eio__futimes (int fd, const struct timeval tv[2])
 # undef fdatasync
 # define fdatasync(fd) fsync (fd)
 #endif
+
+static int
+eio__syncfs (int fd)
+{
+  int res;
+
+#if HAVE_SYS_SYNCFS
+  res = (int)syscall (__NR_syncfs, (int)(fd));
+#else
+  res = -1;
+  errno = ENOSYS;
+#endif
+
+  if (res < 0 && errno == ENOSYS && fd >= 0)
+    sync ();
+
+  return res;
+}
 
 /* sync_file_range always needs emulation */
 static int
@@ -2069,11 +2091,12 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_SYNC:      req->result = 0; sync (); break;
       case EIO_FSYNC:     req->result = fsync     (req->int1); break;
       case EIO_FDATASYNC: req->result = fdatasync (req->int1); break;
+      case EIO_SYNCFS:    req->result = eio__syncfs (req->int1); break;
+      case EIO_SYNC_FILE_RANGE: req->result = eio__sync_file_range (req->int1, req->offs, req->size, req->int2); break;
       case EIO_MSYNC:     req->result = eio__msync (req->ptr2, req->size, req->int1); break;
       case EIO_MTOUCH:    req->result = eio__mtouch (req); break;
       case EIO_MLOCK:     req->result = eio__mlock (req->ptr2, req->size); break;
       case EIO_MLOCKALL:  req->result = eio__mlockall (req->int1); break;
-      case EIO_SYNC_FILE_RANGE: req->result = eio__sync_file_range (req->int1, req->offs, req->size, req->int2); break;
       case EIO_FALLOCATE: req->result = eio__fallocate (req->int1, req->int2, req->offs, req->size); break;
 
       case EIO_READDIR:   eio__scandir (req, self); break;
@@ -2164,6 +2187,21 @@ eio_req *eio_msync (void *addr, size_t length, int flags, int pri, eio_cb cb, vo
   REQ (EIO_MSYNC); req->ptr2 = addr; req->size = length; req->int1 = flags; SEND;
 }
 
+eio_req *eio_fdatasync (int fd, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_FDATASYNC); req->int1 = fd; SEND;
+}
+
+eio_req *eio_syncfs (int fd, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_SYNCFS); req->int1 = fd; SEND;
+}
+
+eio_req *eio_sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_SYNC_FILE_RANGE); req->int1 = fd; req->offs = offset; req->size = nbytes; req->int2 = flags; SEND;
+}
+
 eio_req *eio_mtouch (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data)
 {
   REQ (EIO_MTOUCH); req->ptr2 = addr; req->size = length; req->int1 = flags; SEND;
@@ -2179,19 +2217,9 @@ eio_req *eio_mlockall (int flags, int pri, eio_cb cb, void *data)
   REQ (EIO_MLOCKALL); req->int1 = flags; SEND;
 }
 
-eio_req *eio_sync_file_range (int fd, off_t offset, size_t nbytes, unsigned int flags, int pri, eio_cb cb, void *data)
-{
-  REQ (EIO_SYNC_FILE_RANGE); req->int1 = fd; req->offs = offset; req->size = nbytes; req->int2 = flags; SEND;
-}
-
 eio_req *eio_fallocate (int fd, int mode, off_t offset, size_t len, int pri, eio_cb cb, void *data)
 {
   REQ (EIO_FALLOCATE); req->int1 = fd; req->int2 = mode; req->offs = offset; req->size = len; SEND;
-}
-
-eio_req *eio_fdatasync (int fd, int pri, eio_cb cb, void *data)
-{
-  REQ (EIO_FDATASYNC); req->int1 = fd; SEND;
 }
 
 eio_req *eio_close (int fd, int pri, eio_cb cb, void *data)

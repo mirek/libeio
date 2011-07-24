@@ -56,4 +56,6 @@ TODO: fadvise request
 	- cancelled requests will still invoke their request callbacks.
         - add fallocate.
         - do not acquire any locks when forking.
+        - incorporated some mingw32 changes by traviscline.
+        - added syncfs support, using direct syscall.
 

@@ -179,7 +179,7 @@ enum
   EIO_UTIME, EIO_FUTIME,
   EIO_CHMOD, EIO_FCHMOD,
   EIO_CHOWN, EIO_FCHOWN,
-  EIO_SYNC, EIO_FSYNC, EIO_FDATASYNC,
+  EIO_SYNC, EIO_FSYNC, EIO_FDATASYNC, EIO_SYNCFS,
   EIO_MSYNC, EIO_MTOUCH, EIO_SYNC_FILE_RANGE, EIO_FALLOCATE,
   EIO_MLOCK, EIO_MLOCKALL,
   EIO_UNLINK, EIO_RMDIR, EIO_MKDIR, EIO_RENAME,
@@ -292,6 +292,7 @@ eio_req *eio_busy      (eio_tstamp delay, int pri, eio_cb cb, void *data); /* ti
 eio_req *eio_sync      (int pri, eio_cb cb, void *data);
 eio_req *eio_fsync     (int fd, int pri, eio_cb cb, void *data);
 eio_req *eio_fdatasync (int fd, int pri, eio_cb cb, void *data);
+eio_req *eio_syncfs    (int fd, int pri, eio_cb cb, void *data);
 eio_req *eio_msync     (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data);
 eio_req *eio_mtouch    (void *addr, size_t length, int flags, int pri, eio_cb cb, void *data);
 eio_req *eio_mlock     (void *addr, size_t length, int pri, eio_cb cb, void *data);
