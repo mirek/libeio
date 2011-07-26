@@ -107,7 +107,10 @@ static void eio_destroy (eio_req *req);
   #undef PAGESIZE
   #define PAGESIZE 4096 /* GetSystemInfo? */
 
+  /* TODO: look at how perl does stat (non-sloppy), unlink (ro-files), utime, link */
+
   #ifdef EIO_STRUCT_STATI64
+    /* look at perl's non-sloppy stat */
     #define stat(path,buf)       _stati64 (path,buf)
     #define fstat(fd,buf)        _fstati64 (fd,buf)
   #endif
