@@ -88,7 +88,8 @@
     #define ECB_MEMORY_FENCE         do { } while (0)
     #define ECB_MEMORY_FENCE_ACQUIRE ECB_MEMORY_FENCE
     #define ECB_MEMORY_FENCE_RELEASE ECB_MEMORY_FENCE
-  #elif defined(_WIN32) && defined(MemoryBarrier)
+  #elif defined(_WIN32)
+    #include <WinNT.h>
     #define ECB_MEMORY_FENCE         MemoryBarrier ()
     #define ECB_MEMORY_FENCE_ACQUIRE ECB_MEMORY_FENCE
     #define ECB_MEMORY_FENCE_RELEASE ECB_MEMORY_FENCE

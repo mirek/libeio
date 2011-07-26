@@ -131,6 +131,37 @@ static void eio_destroy (eio_req *req);
   #define statvfs(path,buf)    EIO_ENOSYS ()
   #define fstatvfs(fd,buf)     EIO_ENOSYS ()
 
+  /* rename() uses MoveFile, which fails to overwrite */
+  #define rename(old,neu)      eio__rename (old, neu)
+
+  static int
+  eio__rename (const char *old, const char *neu)
+  {
+    if (MoveFileEx (old, neu, MOVEFILE_REPLACE_EXISTING))
+      return 0;
+
+    /* should steal _dosmaperr */
+    switch (GetLastError ())
+      {
+        case ERROR_FILE_NOT_FOUND:
+        case ERROR_PATH_NOT_FOUND:
+        case ERROR_INVALID_DRIVE:
+        case ERROR_NO_MORE_FILES:
+        case ERROR_BAD_NETPATH:
+        case ERROR_BAD_NET_NAME:
+        case ERROR_BAD_PATHNAME:
+        case ERROR_FILENAME_EXCED_RANGE:
+          errno = ENOENT;
+          break;
+
+        default:
+          errno = EACCES;
+          break;
+      }
+
+    return -1;
+  }
+
   /* we could even stat and see if it exists */
   static int
   symlink (const char *old, const char *neu)
@@ -1676,6 +1707,7 @@ eio__scandir (eio_req *req, etp_worker *self)
      {
        dirp = 0;
 
+        /* should steal _dosmaperr */
         switch (GetLastError ())
           {
             case ERROR_FILE_NOT_FOUND:
