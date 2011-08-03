@@ -326,11 +326,11 @@ static void (*done_poll_cb) (void);
 static unsigned int max_poll_time;     /* reslock */
 static unsigned int max_poll_reqs;     /* reslock */
 
-static volatile unsigned int nreqs;    /* reqlock */
-static volatile unsigned int nready;   /* reqlock */
-static volatile unsigned int npending; /* reqlock */
-static volatile unsigned int max_idle = 4;      /* maximum number of threads that can idle indefinitely */
-static volatile unsigned int idle_timeout = 10; /* number of seconds after which an idle threads exit */
+static unsigned int nreqs;    /* reqlock */
+static unsigned int nready;   /* reqlock */
+static unsigned int npending; /* reqlock */
+static unsigned int max_idle = 4;      /* maximum number of threads that can idle indefinitely */
+static unsigned int idle_timeout = 10; /* number of seconds after which an idle threads exit */
 
 static xmutex_t wrklock;
 static xmutex_t reslock;

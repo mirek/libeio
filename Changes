@@ -59,4 +59,5 @@ TODO: fadvise request
         - incorporated some mingw32 changes by traviscline.
         - added syncfs support, using direct syscall.
         - set thread name on linux (ps -L/Hcx, top, gdb).
+        - remove useless use of volatile variables.
 
