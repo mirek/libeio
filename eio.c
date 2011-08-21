@@ -45,7 +45,7 @@
 #include "ecb.h"
 
 #ifdef EIO_STACKSIZE
-# define XTHREAD_STACKSIZE EIO_STACKSIZE
+# define X_STACKSIZE EIO_STACKSIZE
 #endif
 #include "xthread.h"
 
