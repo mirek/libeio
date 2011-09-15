@@ -1708,33 +1708,36 @@ eio__scandir (eio_req *req, etp_worker *self)
 
     if (dirp == INVALID_HANDLE_VALUE)
      {
-       dirp = 0;
+       /* should steal _dosmaperr */
+       switch (GetLastError ())
+         {
+           case ERROR_FILE_NOT_FOUND:
+             req->result = 0;
+             break;
 
-        /* should steal _dosmaperr */
-        switch (GetLastError ())
-          {
-            case ERROR_FILE_NOT_FOUND:
-              req->result = 0;
-              break;
+           case ERROR_INVALID_NAME:
+           case ERROR_PATH_NOT_FOUND:
+           case ERROR_NO_MORE_FILES:
+             errno = ENOENT;
+             break;
 
-            case ERROR_INVALID_NAME:
-            case ERROR_PATH_NOT_FOUND:
-            case ERROR_NO_MORE_FILES:
-              errno = ENOENT;
-              break;
+           case ERROR_NOT_ENOUGH_MEMORY:
+             errno = ENOMEM;
+             break;
 
-            case ERROR_NOT_ENOUGH_MEMORY:
-              errno = ENOMEM;
-              break;
+           default:
+             errno = EINVAL;
+             break;
+         }
 
-            default:
-              errno = EINVAL;
-              break;
-          }
+       return;
      }
   }
 #else
   dirp = opendir (req->ptr1);
+
+  if (!dirp)
+    return;
 #endif
 
   if (req->flags & EIO_FLAG_PTR1_FREE)
@@ -1744,191 +1747,193 @@ eio__scandir (eio_req *req, etp_worker *self)
   req->ptr1 = dents = flags ? malloc (dentalloc * sizeof (eio_dirent)) : 0;
   req->ptr2 = names = malloc (namesalloc);
 
-  if (dirp && names && (!flags || dents))
-    for (;;)
-      {
-        int done;
+  if (!names || (flags && !dents))
+    return;
+
+  for (;;)
+    {
+      int done;
 
 #ifdef _WIN32
-        done = !dirp;
+      done = !dirp;
 #else
-        errno = 0;
-        entp = readdir (dirp);
-        done = !entp;
+      errno = 0;
+      entp = readdir (dirp);
+      done = !entp;
 #endif
 
-        if (done)
-          {
+      if (done)
+        {
 #ifndef _WIN32
-            int old_errno = errno;
-            closedir (dirp);
-            errno = old_errno;
+          int old_errno = errno;
+          closedir (dirp);
+          errno = old_errno;
 
-            if (errno)
-              break;
+          if (errno)
+            break;
 #endif
 
-            /* sort etc. */
-            req->int1   = flags;
-            req->result = dentoffs;
+          /* sort etc. */
+          req->int1   = flags;
+          req->result = dentoffs;
 
-            if (flags & EIO_READDIR_STAT_ORDER)
-              eio_dent_sort (dents, dentoffs, flags & EIO_READDIR_DIRS_FIRST ? 7 : 0, inode_bits);
-            else if (flags & EIO_READDIR_DIRS_FIRST)
-              if (flags & EIO_READDIR_FOUND_UNKNOWN)
-                eio_dent_sort (dents, dentoffs, 7, inode_bits); /* sort by score and inode */
-              else
-                {
-                  /* in this case, all is known, and we just put dirs first and sort them */
-                  eio_dirent *oth = dents + dentoffs;
-                  eio_dirent *dir = dents;
+          if (flags & EIO_READDIR_STAT_ORDER)
+            eio_dent_sort (dents, dentoffs, flags & EIO_READDIR_DIRS_FIRST ? 7 : 0, inode_bits);
+          else if (flags & EIO_READDIR_DIRS_FIRST)
+            if (flags & EIO_READDIR_FOUND_UNKNOWN)
+              eio_dent_sort (dents, dentoffs, 7, inode_bits); /* sort by score and inode */
+            else
+              {
+                /* in this case, all is known, and we just put dirs first and sort them */
+                eio_dirent *oth = dents + dentoffs;
+                eio_dirent *dir = dents;
 
-                  /* now partition dirs to the front, and non-dirs to the back */
-                  /* by walking from both sides and swapping if necessary */
-                  while (oth > dir)
-                    {
-                      if (dir->type == EIO_DT_DIR)
+                /* now partition dirs to the front, and non-dirs to the back */
+                /* by walking from both sides and swapping if necessary */
+                while (oth > dir)
+                  {
+                    if (dir->type == EIO_DT_DIR)
+                      ++dir;
+                    else if ((--oth)->type == EIO_DT_DIR)
+                      {
+                        eio_dirent tmp = *dir; *dir = *oth; *oth = tmp;
+
                         ++dir;
-                      else if ((--oth)->type == EIO_DT_DIR)
-                        {
-                          eio_dirent tmp = *dir; *dir = *oth; *oth = tmp;
+                      }
+                  }
 
-                          ++dir;
-                        }
-                    }
+                /* now sort the dirs only (dirs all have the same score) */
+                eio_dent_sort (dents, dir - dents, 0, inode_bits);
+              }
 
-                  /* now sort the dirs only (dirs all have the same score) */
-                  eio_dent_sort (dents, dir - dents, 0, inode_bits);
+          break;
+        }
+
+      /* now add the entry to our list(s) */
+      name = D_NAME (entp);
+
+      /* skip . and .. entries */
+      if (name [0] != '.' || (name [1] && (name [1] != '.' || name [2])))
+        {
+          int len = D_NAMLEN (entp) + 1;
+
+          while (ecb_expect_false (namesoffs + len > namesalloc))
+            {
+              namesalloc *= 2;
+              req->ptr2 = names = realloc (names, namesalloc);
+
+              if (!names)
+                break;
+            }
+
+          memcpy (names + namesoffs, name, len);
+
+          if (dents)
+            {
+              struct eio_dirent *ent;
+
+              if (ecb_expect_false (dentoffs == dentalloc))
+                {
+                  dentalloc *= 2;
+                  req->ptr1 = dents = realloc (dents, dentalloc * sizeof (eio_dirent));
+
+                  if (!dents)
+                    break;
                 }
 
-            break;
-          }
+              ent = dents + dentoffs;
 
-        /* now add the entry to our list(s) */
-        name = D_NAME (entp);
+              ent->nameofs = namesoffs; /* rather dirtily we store the offset in the pointer */
+              ent->namelen = len - 1;
+              ent->inode   = D_INO (entp);
 
-        /* skip . and .. entries */
-        if (name [0] != '.' || (name [1] && (name [1] != '.' || name [2])))
-          {
-            int len = D_NAMLEN (entp) + 1;
+              inode_bits |= ent->inode;
 
-            while (ecb_expect_false (namesoffs + len > namesalloc))
-              {
-                namesalloc *= 2;
-                req->ptr2 = names = realloc (names, namesalloc);
+              switch (D_TYPE (entp))
+                {
+                  default:
+                    ent->type = EIO_DT_UNKNOWN;
+                    flags |= EIO_READDIR_FOUND_UNKNOWN;
+                    break;
 
-                if (!names)
-                  break;
-              }
+                  #ifdef DT_FIFO
+                    case DT_FIFO: ent->type = EIO_DT_FIFO; break;
+                  #endif
+                  #ifdef DT_CHR
+                    case DT_CHR:  ent->type = EIO_DT_CHR;  break;
+                  #endif          
+                  #ifdef DT_MPC
+                    case DT_MPC:  ent->type = EIO_DT_MPC;  break;
+                  #endif          
+                  #ifdef DT_DIR
+                    case DT_DIR:  ent->type = EIO_DT_DIR;  break;
+                  #endif          
+                  #ifdef DT_NAM
+                    case DT_NAM:  ent->type = EIO_DT_NAM;  break;
+                  #endif          
+                  #ifdef DT_BLK
+                    case DT_BLK:  ent->type = EIO_DT_BLK;  break;
+                  #endif          
+                  #ifdef DT_MPB
+                    case DT_MPB:  ent->type = EIO_DT_MPB;  break;
+                  #endif          
+                  #ifdef DT_REG
+                    case DT_REG:  ent->type = EIO_DT_REG;  break;
+                  #endif          
+                  #ifdef DT_NWK
+                    case DT_NWK:  ent->type = EIO_DT_NWK;  break;
+                  #endif          
+                  #ifdef DT_CMP
+                    case DT_CMP:  ent->type = EIO_DT_CMP;  break;
+                  #endif          
+                  #ifdef DT_LNK
+                    case DT_LNK:  ent->type = EIO_DT_LNK;  break;
+                  #endif
+                  #ifdef DT_SOCK
+                    case DT_SOCK: ent->type = EIO_DT_SOCK; break;
+                  #endif
+                  #ifdef DT_DOOR
+                    case DT_DOOR: ent->type = EIO_DT_DOOR; break;
+                  #endif
+                  #ifdef DT_WHT
+                    case DT_WHT:  ent->type = EIO_DT_WHT;  break;
+                  #endif
+                }
 
-            memcpy (names + namesoffs, name, len);
+              ent->score = 7;
 
-            if (dents)
-              {
-                struct eio_dirent *ent;
+              if (flags & EIO_READDIR_DIRS_FIRST)
+                {
+                  if (ent->type == EIO_DT_UNKNOWN)
+                    {
+                      if (*name == '.') /* leading dots are likely directories, and, in any case, rare */
+                        ent->score = 1;
+                      else if (!strchr (name, '.')) /* absense of dots indicate likely dirs */
+                        ent->score = len <= 2 ? 4 - len : len <= 4 ? 4 : len <= 7 ? 5 : 6; /* shorter == more likely dir, but avoid too many classes */
+                    }
+                  else if (ent->type == EIO_DT_DIR)
+                    ent->score = 0;
+                }
+            }
 
-                if (ecb_expect_false (dentoffs == dentalloc))
-                  {
-                    dentalloc *= 2;
-                    req->ptr1 = dents = realloc (dents, dentalloc * sizeof (eio_dirent));
+          namesoffs += len;
+          ++dentoffs;
+        }
 
-                    if (!dents)
-                      break;
-                  }
-
-                ent = dents + dentoffs;
-
-                ent->nameofs = namesoffs; /* rather dirtily we store the offset in the pointer */
-                ent->namelen = len - 1;
-                ent->inode   = D_INO (entp);
-
-                inode_bits |= ent->inode;
-
-                switch (D_TYPE (entp))
-                  {
-                    default:
-                      ent->type = EIO_DT_UNKNOWN;
-                      flags |= EIO_READDIR_FOUND_UNKNOWN;
-                      break;
-
-                    #ifdef DT_FIFO
-                      case DT_FIFO: ent->type = EIO_DT_FIFO; break;
-                    #endif
-                    #ifdef DT_CHR
-                      case DT_CHR:  ent->type = EIO_DT_CHR;  break;
-                    #endif          
-                    #ifdef DT_MPC
-                      case DT_MPC:  ent->type = EIO_DT_MPC;  break;
-                    #endif          
-                    #ifdef DT_DIR
-                      case DT_DIR:  ent->type = EIO_DT_DIR;  break;
-                    #endif          
-                    #ifdef DT_NAM
-                      case DT_NAM:  ent->type = EIO_DT_NAM;  break;
-                    #endif          
-                    #ifdef DT_BLK
-                      case DT_BLK:  ent->type = EIO_DT_BLK;  break;
-                    #endif          
-                    #ifdef DT_MPB
-                      case DT_MPB:  ent->type = EIO_DT_MPB;  break;
-                    #endif          
-                    #ifdef DT_REG
-                      case DT_REG:  ent->type = EIO_DT_REG;  break;
-                    #endif          
-                    #ifdef DT_NWK
-                      case DT_NWK:  ent->type = EIO_DT_NWK;  break;
-                    #endif          
-                    #ifdef DT_CMP
-                      case DT_CMP:  ent->type = EIO_DT_CMP;  break;
-                    #endif          
-                    #ifdef DT_LNK
-                      case DT_LNK:  ent->type = EIO_DT_LNK;  break;
-                    #endif
-                    #ifdef DT_SOCK
-                      case DT_SOCK: ent->type = EIO_DT_SOCK; break;
-                    #endif
-                    #ifdef DT_DOOR
-                      case DT_DOOR: ent->type = EIO_DT_DOOR; break;
-                    #endif
-                    #ifdef DT_WHT
-                      case DT_WHT:  ent->type = EIO_DT_WHT;  break;
-                    #endif
-                  }
-
-                ent->score = 7;
-
-                if (flags & EIO_READDIR_DIRS_FIRST)
-                  {
-                    if (ent->type == EIO_DT_UNKNOWN)
-                      {
-                        if (*name == '.') /* leading dots are likely directories, and, in any case, rare */
-                          ent->score = 1;
-                        else if (!strchr (name, '.')) /* absense of dots indicate likely dirs */
-                          ent->score = len <= 2 ? 4 - len : len <= 4 ? 4 : len <= 7 ? 5 : 6; /* shorter == more likely dir, but avoid too many classes */
-                      }
-                    else if (ent->type == EIO_DT_DIR)
-                      ent->score = 0;
-                  }
-              }
-
-            namesoffs += len;
-            ++dentoffs;
-          }
-
-        if (EIO_CANCELLED (req))
-          {
-            errno = ECANCELED;
-            break;
-          }
+      if (EIO_CANCELLED (req))
+        {
+          errno = ECANCELED;
+          break;
+        }
 
 #ifdef _WIN32
-        if (!FindNextFile (dirp, &entp))
-          {
-            FindClose (dirp);
-            dirp = 0;
-          }
+      if (!FindNextFile (dirp, &entp))
+        {
+          FindClose (dirp);
+          dirp = 0;
+        }
 #endif
-      }
+    }
 }
 
 /*****************************************************************************/

@@ -75,7 +75,7 @@ typedef int (*eio_cb)(eio_req *req);
     typedef intptr_t eio_ssize_t; /* or SSIZE_T */
   #endif
   #if __GNUC__
-    typedef long long eio_ino_t;
+    typedef long long eio_ino_t; /* signed for compatibility to msvc */
   #else
     typedef __int64   eio_ino_t; /* unsigned not supported by msvc */
   #endif
