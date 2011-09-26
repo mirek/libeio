@@ -60,6 +60,12 @@
 #include <fcntl.h>
 #include <assert.h>
 
+#if _POSIX_VERSION >= 200809L
+# define HAVE_AT 1
+#else
+# define HAVE_AT 0
+#endif
+
 /* intptr_t comes from unistd.h, says POSIX/UNIX/tradition */
 /* intptr_t only comes from stdint.h, says idiot openbsd coder */
 #if HAVE_STDINT_H
@@ -2272,7 +2278,8 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_WD_OPEN:   req->wd = eio__wd_open_sync (&self->tmpbuf, req->wd, req->ptr1);
                           req->result = req->wd == EIO_INVALID_WD ? -1 : 0;
                           break;
-      case EIO_WD_CLOSE:  eio_wd_close_sync (req->wd); break;
+      case EIO_WD_CLOSE:  req->result = 0;
+                          eio_wd_close_sync (req->wd); break;
 
       case EIO_READ:      ALLOC (req->size);
                           req->result = req->offs >= 0
@@ -2286,6 +2293,7 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_SENDFILE:  req->result = eio__sendfile (req->int1, req->int2, req->offs, req->size); break;
 
 #if HAVE_AT
+
       case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
                           req->result = fstatat   (dirfd, req->ptr1, (EIO_STRUCT_STAT *)req->ptr2, 0); break;
       case EIO_LSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
@@ -2306,7 +2314,32 @@ eio_execute (etp_worker *self, eio_req *req)
                           req->result = readlinkat (dirfd, req->ptr1, req->ptr2, PATH_MAX); break;
       case EIO_STATVFS:   ALLOC (sizeof (EIO_STRUCT_STATVFS));
                           req->result = eio__statvfsat (dirfd, req->ptr1, (EIO_STRUCT_STATVFS *)req->ptr2); break;
+      case EIO_UTIME:
+      case EIO_FUTIME:
+        {
+          struct timespec ts[2];
+          struct timespec *times;
+
+          if (req->nv1 != -1. || req->nv2 != -1.)
+            {
+              ts[0].tv_sec  = req->nv1;
+              ts[0].tv_nsec = (req->nv1 - ts[0].tv_sec) * 1e9;
+              ts[1].tv_sec  = req->nv2;
+              ts[1].tv_nsec = (req->nv2 - ts[1].tv_sec) * 1e9;
+
+              times = ts;
+            }
+          else
+            times = 0;
+
+          req->result = req->type == EIO_FUTIME
+                        ? futimens  (req->int1, times)
+                        : utimensat (dirfd, req->ptr1, times, 0);
+        }
+        break;
+
 #else
+
       case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
                           req->result = stat      (path     , (EIO_STRUCT_STAT *)req->ptr2); break;
       case EIO_LSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
@@ -2327,6 +2360,31 @@ eio_execute (etp_worker *self, eio_req *req)
                           req->result = readlink  (path, req->ptr2, PATH_MAX); break;
       case EIO_STATVFS:   ALLOC (sizeof (EIO_STRUCT_STATVFS));
                           req->result = statvfs   (path     , (EIO_STRUCT_STATVFS *)req->ptr2); break;
+
+      case EIO_UTIME:
+      case EIO_FUTIME:
+        {
+          struct timeval tv[2];
+          struct timeval *times;
+
+          if (req->nv1 != -1. || req->nv2 != -1.)
+            {
+              tv[0].tv_sec  = req->nv1;
+              tv[0].tv_usec = (req->nv1 - tv[0].tv_sec) * 1e6;
+              tv[1].tv_sec  = req->nv2;
+              tv[1].tv_usec = (req->nv2 - tv[1].tv_sec) * 1e6;
+
+              times = tv;
+            }
+          else
+            times = 0;
+
+          req->result = req->type == EIO_FUTIME
+                        ? futimes (req->int1, times)
+                        : utimes  (req->ptr1, times);
+        }
+        break;
+
 #endif
 
       case EIO_REALPATH:  if (0 <= (req->result = eio__realpath (&self->tmpbuf, req->wd, req->ptr1)))
@@ -2374,30 +2432,6 @@ eio_execute (etp_worker *self, eio_req *req)
           req->result = select (0, 0, 0, 0, &tv);
         }
 #endif
-        break;
-
-      case EIO_UTIME:
-      case EIO_FUTIME:
-        {
-          struct timeval tv[2];
-          struct timeval *times;
-
-          if (req->nv1 != -1. || req->nv2 != -1.)
-            {
-              tv[0].tv_sec  = req->nv1;
-              tv[0].tv_usec = (req->nv1 - tv[0].tv_sec) * 1000000.;
-              tv[1].tv_sec  = req->nv2;
-              tv[1].tv_usec = (req->nv2 - tv[1].tv_sec) * 1000000.;
-
-              times = tv;
-            }
-          else
-            times = 0;
-
-          req->result = req->type == EIO_FUTIME
-                        ? futimes (req->int1, times)
-                        : utimes  (req->ptr1, times);
-        }
         break;
 
       case EIO_GROUP:
