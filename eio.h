@@ -90,6 +90,16 @@ typedef int (*eio_cb)(eio_req *req);
 # define EIO_STRUCT_STATVFS struct statvfs
 #endif
 
+/* managing working directories */
+
+typedef void *eio_wd;
+
+#define EIO_CWD 0 /* the current working directory of the process, guaranteed to be a null pointer */
+#define EIO_INVALID_WD ((eio_wd)(int)-1) /* failure return for eio_wd_open */
+
+eio_wd eio_wd_open_sync (eio_wd wd, const char *path);
+void eio_wd_close_sync (eio_wd wd);
+
 /* for readdir */
 
 /* eio_readdir flags */
@@ -170,23 +180,36 @@ typedef double eio_tstamp;
 enum
 {
   EIO_CUSTOM,
-  EIO_OPEN, EIO_CLOSE, EIO_DUP2,
+  EIO_WD_OPEN, EIO_WD_CLOSE,
+
+  EIO_CLOSE, EIO_DUP2,
   EIO_READ, EIO_WRITE,
   EIO_READAHEAD, EIO_SENDFILE,
-  EIO_STAT, EIO_LSTAT, EIO_FSTAT,
-  EIO_STATVFS, EIO_FSTATVFS,
-  EIO_TRUNCATE, EIO_FTRUNCATE,
-  EIO_UTIME, EIO_FUTIME,
-  EIO_CHMOD, EIO_FCHMOD,
-  EIO_CHOWN, EIO_FCHOWN,
+  EIO_FSTAT, EIO_FSTATVFS,
+  EIO_FTRUNCATE, EIO_FUTIME, EIO_FCHMOD, EIO_FCHOWN,
   EIO_SYNC, EIO_FSYNC, EIO_FDATASYNC, EIO_SYNCFS,
   EIO_MSYNC, EIO_MTOUCH, EIO_SYNC_FILE_RANGE, EIO_FALLOCATE,
   EIO_MLOCK, EIO_MLOCKALL,
-  EIO_UNLINK, EIO_RMDIR, EIO_MKDIR, EIO_RENAME,
-  EIO_MKNOD, EIO_READDIR,
-  EIO_LINK, EIO_SYMLINK, EIO_READLINK, EIO_REALPATH,
   EIO_GROUP, EIO_NOP,
-  EIO_BUSY
+  EIO_BUSY,
+
+  /* these use wd + ptr1, but are emulated */
+  EIO_REALPATH,
+  EIO_STATVFS,
+  EIO_READDIR,
+
+  /* all the following requests use wd + ptr1 as path in xxxat functions */
+  EIO_OPEN,
+  EIO_STAT, EIO_LSTAT,
+  EIO_TRUNCATE,
+  EIO_UTIME,
+  EIO_CHMOD,
+  EIO_CHOWN,
+  EIO_UNLINK, EIO_RMDIR, EIO_MKDIR, EIO_RENAME,
+  EIO_MKNOD,
+  EIO_LINK, EIO_SYMLINK, EIO_READLINK,
+
+  EIO_REQ_TYPE_NUM
 };
 
 /* mlockall constants */
@@ -211,6 +234,8 @@ struct eio_req
 {
   eio_req volatile *next; /* private ETP */
 
+  eio_wd wd;       /* all applicable requests: working directory of pathname, old name; wd_open: return wd */
+
   eio_ssize_t result;  /* result of syscall, e.g. result = read (... */
   off_t offs;      /* read, write, truncate, readahead, sync_file_range, fallocate: file offset, mknod: dev_t */
   size_t size;     /* read, write, readahead, sendfile, msync, mlock, sync_file_range, fallocate: length */
@@ -222,7 +247,7 @@ struct eio_req
   int type;        /* EIO_xxx constant ETP */
   int int1;        /* all applicable requests: file descriptor; sendfile: output fd; open, msync, mlockall, readdir: flags */
   long int2;       /* chown, fchown: uid; sendfile: input fd; open, chmod, mkdir, mknod: file mode, sync_file_range, fallocate: flags */
-  long int3;       /* chown, fchown: gid */
+  long int3;       /* chown, fchown: gid; rename: working directory of new name */
   int errorno;     /* errno value on syscall return */
 
 #if __i386 || __amd64
