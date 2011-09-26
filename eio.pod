@@ -235,8 +235,8 @@ The C<void *data> member simply stores the value of the C<data> argument.
 
 =back
 
-Memmbers not explicitly described as accessible must not be
-accessed. Specifically, there is no gurantee that any members will still
+Members not explicitly described as accessible must not be
+accessed. Specifically, there is no guarantee that any members will still
 have the value they had when the request was submitted.
 
 The return value of the callback is normally C<0>, which tells libeio to
