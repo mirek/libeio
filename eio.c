@@ -586,7 +586,7 @@ etp_maybe_start_thread (void)
 static void ecb_cold
 etp_end_thread (void)
 {
-  eio_req *req = calloc (1, sizeof (eio_req));
+  eio_req *req = calloc (1, sizeof (eio_req)); /* will be freed by worker */
 
   req->type = -1;
   req->pri  = ETP_PRI_MAX - ETP_PRI_MIN;
@@ -1965,14 +1965,24 @@ eio__scandir (eio_req *req)
 
 #if HAVE_AT
 
-#define WD2FD(wd) (wd ? ((int)wd) - 1 : AT_FDCWD)
+#define WD2FD(wd) ((wd) ? ((int)(long)(wd)) - 1 : AT_FDCWD)
+
+#ifndef O_SEARCH
+# define O_SEARCH O_RDONLY
+#endif
 
 eio_wd
 eio_wd_open_sync (eio_wd wd, const char *path)
 {
   int fd = openat (WD2FD (wd), path, O_CLOEXEC | O_SEARCH | O_DIRECTORY);
 
-  return fd >= 0 ? (eio_wd)(fd + 1) : EIO_INVALID_WD;
+  return fd >= 0 ? (eio_wd)(long)(fd + 1) : EIO_INVALID_WD;
+}
+
+static eio_wd
+eio__wd_open_sync (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
+{
+  return eio_wd_open_sync (wd, path);
 }
 
 void
@@ -1982,6 +1992,35 @@ eio_wd_close_sync (eio_wd wd)
 
   if (fd >= 0)
     close (fd);
+}
+
+static int
+eio__truncateat (int dirfd, const char *path, off_t length)
+{
+  int fd = openat (dirfd, path, O_WRONLY | O_CLOEXEC);
+  int res;
+
+  if (fd < 0)
+    return fd;
+
+  res = ftruncate (fd, length);
+  close (fd);
+  return res;
+}
+
+static int
+eio__statvfsat (int dirfd, const char *path, struct statvfs *buf)
+{
+  int fd = openat (dirfd, path, O_SEARCH | O_CLOEXEC);
+  int res;
+
+  if (fd < 0)
+    return fd;
+
+  res = fstatvfs (fd, buf);
+  close (fd);
+  return res;
+
 }
 
 #else
@@ -2008,7 +2047,7 @@ wd_expand (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
   }
 }
 
-eio_wd
+static eio_wd
 eio__wd_open_sync (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
 {
   if (*path == '/') /* absolute paths ignore wd */
@@ -2247,27 +2286,26 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_SENDFILE:  req->result = eio__sendfile (req->int1, req->int2, req->offs, req->size); break;
 
 #if HAVE_AT
-      case EIO_GETPATH:   abort ();
       case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
-                          req->result = fstatat   (dirfd, path, (EIO_STRUCT_STAT *)req->ptr2); break;
+                          req->result = fstatat   (dirfd, req->ptr1, (EIO_STRUCT_STAT *)req->ptr2, 0); break;
       case EIO_LSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
-                          req->result = lstat     (dirfd, path, (EIO_STRUCT_STAT *)req->ptr2); break;
-#if 0/*D*/
-      case EIO_STATVFS:   ALLOC (sizeof (EIO_STRUCT_STATVFS));
-                          req->result = statvfs   (dirfd, path, (EIO_STRUCT_STATVFS *)req->ptr2); break;
-#endif
-      case EIO_CHOWN:     req->result = chown     (dirfd, path, req->int2, req->int3); break;
-      case EIO_CHMOD:     req->result = chmod     (dirfd, path, (mode_t)req->int2); break;
-      case EIO_TRUNCATE:  req->result = truncate  (dirfd, path, req->offs); break;
-      case EIO_OPEN:      req->result = open      (dirfd, path, req->int1, (mode_t)req->int2); break;
+                          req->result = fstatat   (dirfd, req->ptr1, (EIO_STRUCT_STAT *)req->ptr2, AT_SYMLINK_NOFOLLOW); break;
+      case EIO_CHOWN:     req->result = fchownat  (dirfd, req->ptr1, req->int2, req->int3, 0); break;
+      case EIO_CHMOD:     req->result = fchmodat  (dirfd, req->ptr1, (mode_t)req->int2, 0); break;
+      case EIO_TRUNCATE:  req->result = eio__truncateat (dirfd, req->ptr1, req->offs); break;
+      case EIO_OPEN:      req->result = openat    (dirfd, req->ptr1, req->int1, (mode_t)req->int2); break;
 
-      case EIO_UNLINK:    req->result = unlink    (dirfd, path); break;
-      case EIO_RMDIR:     req->result = rmdir     (dirfd, path); break;
-      case EIO_MKDIR:     req->result = mkdir     (dirfd, path, (mode_t)req->int2); break;
-      case EIO_RENAME:    req->result = rename    (dirfd, path, req->ptr2); break;
-      case EIO_LINK:      req->result = link      (dirfd, path, req->ptr2); break;
-      case EIO_SYMLINK:   req->result = symlink   (dirfd, path, req->ptr2); break;
-      case EIO_MKNOD:     req->result = mknod     (dirfd, path, (mode_t)req->int2, (dev_t)req->offs); break;
+      case EIO_UNLINK:    req->result = unlinkat  (dirfd, req->ptr1, 0); break;
+      case EIO_RMDIR:     req->result = unlinkat  (dirfd, req->ptr1, AT_REMOVEDIR); break;
+      case EIO_MKDIR:     req->result = mkdirat   (dirfd, req->ptr1, (mode_t)req->int2); break;
+      case EIO_RENAME:    req->result = renameat  (dirfd, req->ptr1, WD2FD (req->int3), req->ptr2); break;
+      case EIO_LINK:      req->result = linkat    (dirfd, req->ptr1, WD2FD (req->int3), req->ptr2, 0); break;
+      case EIO_SYMLINK:   req->result = symlinkat (req->ptr1, dirfd, req->ptr2); break;
+      case EIO_MKNOD:     req->result = mknodat   (dirfd, req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
+      case EIO_READLINK:  ALLOC (PATH_MAX);
+                          req->result = readlinkat (dirfd, req->ptr1, req->ptr2, PATH_MAX); break;
+      case EIO_STATVFS:   ALLOC (sizeof (EIO_STRUCT_STATVFS));
+                          req->result = eio__statvfsat (dirfd, req->ptr1, (EIO_STRUCT_STATVFS *)req->ptr2); break;
 #else
       case EIO_STAT:      ALLOC (sizeof (EIO_STRUCT_STAT));
                           req->result = stat      (path     , (EIO_STRUCT_STAT *)req->ptr2); break;
@@ -2285,9 +2323,10 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_LINK:      req->result = link      (path     , req->ptr2); break;
       case EIO_SYMLINK:   req->result = symlink   (path     , req->ptr2); break;
       case EIO_MKNOD:     req->result = mknod     (path     , (mode_t)req->int2, (dev_t)req->offs); break;
-
       case EIO_READLINK:  ALLOC (PATH_MAX);
                           req->result = readlink  (path, req->ptr2, PATH_MAX); break;
+      case EIO_STATVFS:   ALLOC (sizeof (EIO_STRUCT_STATVFS));
+                          req->result = statvfs   (path     , (EIO_STRUCT_STATVFS *)req->ptr2); break;
 #endif
 
       case EIO_REALPATH:  if (0 <= (req->result = eio__realpath (&self->tmpbuf, req->wd, req->ptr1)))
@@ -2296,9 +2335,6 @@ eio_execute (etp_worker *self, eio_req *req)
                               memcpy (req->ptr2, self->tmpbuf.ptr, req->result);
                             }
                            break;
-
-      case EIO_STATVFS:   ALLOC (sizeof (EIO_STRUCT_STATVFS)); /*D*/
-                          req->result = statvfs   (path     , (EIO_STRUCT_STATVFS *)req->ptr2); break;
 
       case EIO_FSTAT:     ALLOC (sizeof (EIO_STRUCT_STAT));
                           req->result = fstat     (req->int1, (EIO_STRUCT_STAT *)req->ptr2); break;
