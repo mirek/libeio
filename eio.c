@@ -2476,6 +2476,16 @@ eio_execute (etp_worker *self, eio_req *req)
 
 #ifndef EIO_NO_WRAPPERS
 
+eio_req *eio_wd_open (const char *path, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_WD_OPEN); PATH; SEND;
+}
+
+eio_req *eio_wd_close (eio_wd wd, int pri, eio_cb cb, void *data)
+{
+  REQ (EIO_WD_CLOSE); req->wd = wd; SEND;
+}
+
 eio_req *eio_nop (int pri, eio_cb cb, void *data)
 {
   REQ (EIO_NOP); SEND;

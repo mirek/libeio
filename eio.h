@@ -312,6 +312,8 @@ unsigned int eio_nthreads (void); /* number of worker threads in use currently *
 /* convenience wrappers */
 
 #ifndef EIO_NO_WRAPPERS
+eio_req *eio_wd_open   (const char *path, int pri, eio_cb cb, void *data); /* result=wd */
+eio_req *eio_wd_close  (eio_wd wd, int pri, eio_cb cb, void *data);
 eio_req *eio_nop       (int pri, eio_cb cb, void *data); /* does nothing except go through the whole process */
 eio_req *eio_busy      (eio_tstamp delay, int pri, eio_cb cb, void *data); /* ties a thread for this long, simulating busyness */
 eio_req *eio_sync      (int pri, eio_cb cb, void *data);
