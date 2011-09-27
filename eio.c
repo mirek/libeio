@@ -318,7 +318,7 @@ struct tmpbuf;
 
 #if _POSIX_VERSION >= 200809L
   #define HAVE_AT 1
-  # define WD2FD(wd) ((wd) ? (wd)->fd : AT_FDCWD)
+  #define WD2FD(wd) ((wd) ? (wd)->fd : AT_FDCWD)
   #ifndef O_SEARCH
     #define O_SEARCH O_RDONLY
   #endif
@@ -1786,6 +1786,9 @@ eio__scandir (eio_req *req, etp_worker *self)
           return;
 
         dirp = fdopendir (fd);
+
+        if (!dirp)
+          close (fd);
       }
     else
       dirp = opendir (req->ptr1);
