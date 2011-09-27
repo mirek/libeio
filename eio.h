@@ -92,7 +92,7 @@ typedef int (*eio_cb)(eio_req *req);
 
 /* managing working directories */
 
-typedef void *eio_wd;
+typedef struct eio_pwd *eio_wd;
 
 #define EIO_CWD 0 /* the current working directory of the process, guaranteed to be a null pointer */
 #define EIO_INVALID_WD ((eio_wd)(int)-1) /* failure return for eio_wd_open */

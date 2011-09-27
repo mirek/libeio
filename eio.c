@@ -60,12 +60,6 @@
 #include <fcntl.h>
 #include <assert.h>
 
-#if _POSIX_VERSION >= 200809L
-# define HAVE_AT 1
-#else
-# define HAVE_AT 0
-#endif
-
 /* intptr_t comes from unistd.h, says POSIX/UNIX/tradition */
 /* intptr_t only comes from stdint.h, says idiot openbsd coder */
 #if HAVE_STDINT_H
@@ -319,6 +313,28 @@ tmpbuf_get (struct tmpbuf *buf, int len)
 
   return buf->ptr;
 }
+
+struct tmpbuf;
+
+#if _POSIX_VERSION >= 200809L
+  #define HAVE_AT 1
+  # define WD2FD(wd) ((wd) ? (wd)->fd : AT_FDCWD)
+  #ifndef O_SEARCH
+    #define O_SEARCH O_RDONLY
+  #endif
+#else
+  #define HAVE_AT 0
+  static const char *wd_expand (struct tmpbuf *tmpbuf, eio_wd wd, const char *path);
+#endif
+
+struct eio_pwd
+{
+#if HAVE_AT
+  int fd;
+#endif
+  int len;
+  char str[1]; /* actually, a 0-terminated canonical path */
+};
 
 /*****************************************************************************/
 
@@ -1368,21 +1384,6 @@ eio__mtouch (eio_req *req)
 /*****************************************************************************/
 /* requests implemented outside eio_execute, because they are so large */
 
-/* copies some absolute path to tmpbuf */
-static char *
-eio__getwd (struct tmpbuf *tmpbuf, eio_wd wd)
-{
-  if (wd == EIO_CWD)
-    return getcwd (tmpbuf->ptr, PATH_MAX);
-
-#if HAVE_AT
-  abort (); /*TODO*/
-#else
-  strcpy (tmpbuf->ptr, wd);
-#endif
-  return tmpbuf->ptr;
-}
-
 /* result will always end up in tmpbuf, there is always space for adding a 0-byte */
 static int
 eio__realpath (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
@@ -1395,8 +1396,6 @@ eio__realpath (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
 #else
   int symlinks = 32;
 #endif
-
-  /*D*/ /*TODO: wd ignored */
 
   errno = EINVAL;
   if (!rel)
@@ -1435,11 +1434,24 @@ eio__realpath (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
 
   if (*rel != '/')
     {
-      if (!eio__getwd (tmpbuf, wd))
+      int len;
+
+      errno = ENOENT;
+      if (wd == EIO_INVALID_WD)
         return -1;
+      
+      if (wd == EIO_CWD)
+        {
+          if (!getcwd (res, PATH_MAX))
+            return -1;
+
+          len = strlen (res);
+        }
+      else
+        memcpy (res, wd->str, len = wd->len);
 
       if (res [1]) /* only use if not / */
-        res += strlen (res);
+        res += len;
     }
 
   while (*rel)
@@ -1696,7 +1708,7 @@ eio_dent_sort (eio_dirent *dents, int size, signed char score_bits, eio_ino_t in
 
 /* read a full directory */
 static void
-eio__scandir (eio_req *req)
+eio__scandir (eio_req *req, etp_worker *self)
 {
   char *name, *names;
   int namesalloc = 4096 - sizeof (void *) * 4;
@@ -1724,15 +1736,16 @@ eio__scandir (eio_req *req)
     int len = strlen ((const char *)req->ptr1);
     char *path = malloc (MAX_PATH);
     const char *fmt;
+    const char *reqpath = wd_expand (&self->tmpbuf, req->wd, req->ptr1);
 
     if (!len)
       fmt = "./*";
-    else if (((const char *)req->ptr1)[len - 1] == '/' || ((const char *)req->ptr1)[len - 1] == '\\')
+    else if (reqpath[len - 1] == '/' || reqpath[len - 1] == '\\')
       fmt = "%s*";
     else
       fmt = "%s/*";
 
-    _snprintf (path, MAX_PATH, fmt, (const char *)req->ptr1);
+    _snprintf (path, MAX_PATH, fmt, reqpath);
     dirp = FindFirstFile (path, &entp);
     free (path);
 
@@ -1764,7 +1777,21 @@ eio__scandir (eio_req *req)
      }
   }
 #else
-  dirp = opendir (req->ptr1);
+  #if HAVE_AT
+    if (req->wd)
+      {
+        int fd = openat (WD2FD (req->wd), req->ptr1, O_CLOEXEC | O_SEARCH | O_DIRECTORY);
+
+        if (fd < 0)
+          return;
+
+        dirp = fdopendir (fd);
+      }
+    else
+      dirp = opendir (req->ptr1);
+  #else
+    dirp = opendir (wd_expand (&self->tmpbuf, req->wd, req->ptr1));
+  #endif
 
   if (!dirp)
     return;
@@ -1968,37 +1995,94 @@ eio__scandir (eio_req *req)
 
 /*****************************************************************************/
 /* working directory stuff */
+/* various deficiencies in the posix 2008 api force us to */
+/* keep the absolute path in string form at all times */
+/* fuck yeah. */
 
-#if HAVE_AT
+#if !HAVE_AT
 
-#define WD2FD(wd) ((wd) ? ((int)(long)(wd)) - 1 : AT_FDCWD)
-
-#ifndef O_SEARCH
-# define O_SEARCH O_RDONLY
-#endif
-
-eio_wd
-eio_wd_open_sync (eio_wd wd, const char *path)
+/* a bit like realpath, but usually faster because it doesn'T have to return */
+/* an absolute or canonical path */
+static const char *
+wd_expand (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
 {
-  int fd = openat (WD2FD (wd), path, O_CLOEXEC | O_SEARCH | O_DIRECTORY);
+  if (!wd || *path == '/')
+    return path;
 
-  return fd >= 0 ? (eio_wd)(long)(fd + 1) : EIO_INVALID_WD;
+  if (path [0] == '.' && !path [1])
+    return wd->str;
+
+  {
+    int l1 = wd->len;
+    int l2 = strlen (path);
+
+    char *res = tmpbuf_get (tmpbuf, l1 + l2 + 2);
+
+    memcpy (res, wd->str, l1);
+    res [l1] = '/';
+    memcpy (res + l1 + 1, path, l2 + 1);
+
+    return res;
+  }
 }
+
+#endif
 
 static eio_wd
 eio__wd_open_sync (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
 {
-  return eio_wd_open_sync (wd, path);
+  int fd;
+  eio_wd res;
+  int len = eio__realpath (tmpbuf, wd, path);
+
+  if (len < 0)
+    return EIO_INVALID_WD;
+
+#if HAVE_AT
+  fd = openat (WD2FD (wd), path, O_CLOEXEC | O_SEARCH | O_DIRECTORY);
+
+  if (fd < 0)
+    return EIO_INVALID_WD;
+#endif
+
+  res = malloc (sizeof (*res) + len); /* one extra 0-byte */
+
+#if HAVE_AT
+  res->fd = fd;
+#endif
+
+  res->len = len;
+  memcpy (res->str, tmpbuf->ptr, len);
+  res->str [len] = 0;
+
+  return res;
+}
+
+eio_wd
+eio_wd_open_sync (eio_wd wd, const char *path)
+{
+  struct tmpbuf tmpbuf = { 0 };
+  wd = eio__wd_open_sync (&tmpbuf, wd, path);
+  free (tmpbuf.ptr);
+
+  return wd;
 }
 
 void
 eio_wd_close_sync (eio_wd wd)
 {
-  int fd = WD2FD (wd);
-
-  if (fd >= 0)
-    close (fd);
+  if (wd != EIO_INVALID_WD && wd != EIO_CWD)
+    {
+      #if HAVE_AT
+      close (wd->fd);
+      #endif
+      free (wd);
+    }
 }
+
+#if HAVE_AT
+
+/* they forgot these */
 
 static int
 eio__truncateat (int dirfd, const char *path, off_t length)
@@ -2027,73 +2111,6 @@ eio__statvfsat (int dirfd, const char *path, struct statvfs *buf)
   close (fd);
   return res;
 
-}
-
-#else
-
-/* on legacy systems, we represent the working directories simply by their path strings */
-
-static const char *
-wd_expand (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
-{
-  if (!wd || *path == '/')
-    return path;
-
-  {
-    int l1 = strlen ((const char *)wd);
-    int l2 = strlen (path);
-
-    char *res = tmpbuf_get (tmpbuf, l1 + l2 + 2);
-
-    memcpy (res, wd, l1);
-    res [l1] = '/';
-    memcpy (res + l1 + 1, path, l2 + 1);
-
-    return res;
-  }
-}
-
-static eio_wd
-eio__wd_open_sync (struct tmpbuf *tmpbuf, eio_wd wd, const char *path)
-{
-  if (*path == '/') /* absolute paths ignore wd */
-    path = strdup (path);
-  else if (path [0] == '.' && !path [1]) /* special case '.', as it is common */
-    return wd;
-  else
-    {
-      int len = eio__realpath (tmpbuf, wd, path);
-
-      path = EIO_INVALID_WD;
-
-      if (len >= 0)
-        {
-          ((char *)tmpbuf->ptr)[len] = 0;
-          path = strdup (tmpbuf->ptr);
-        }
-    }
-
-  if (!path)
-    path = EIO_INVALID_WD;
-
-  return (eio_wd)path;
-}
-
-eio_wd
-eio_wd_open_sync (eio_wd wd, const char *path)
-{
-  struct tmpbuf tmpbuf = { 0 };
-  wd = eio__wd_open_sync (&tmpbuf, wd, path);
-  free (tmpbuf.ptr);
-
-  return wd;
-}
-
-void
-eio_wd_close_sync (eio_wd wd)
-{
-  if (wd != EIO_INVALID_WD)
-    free (wd);
 }
 
 #endif
@@ -2306,8 +2323,8 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_UNLINK:    req->result = unlinkat  (dirfd, req->ptr1, 0); break;
       case EIO_RMDIR:     req->result = unlinkat  (dirfd, req->ptr1, AT_REMOVEDIR); break;
       case EIO_MKDIR:     req->result = mkdirat   (dirfd, req->ptr1, (mode_t)req->int2); break;
-      case EIO_RENAME:    req->result = renameat  (dirfd, req->ptr1, WD2FD (req->int3), req->ptr2); break;
-      case EIO_LINK:      req->result = linkat    (dirfd, req->ptr1, WD2FD (req->int3), req->ptr2, 0); break;
+      case EIO_RENAME:    req->result = renameat  (dirfd, req->ptr1, WD2FD ((eio_wd)req->int3), req->ptr2); break;
+      case EIO_LINK:      req->result = linkat    (dirfd, req->ptr1, WD2FD ((eio_wd)req->int3), req->ptr2, 0); break;
       case EIO_SYMLINK:   req->result = symlinkat (req->ptr1, dirfd, req->ptr2); break;
       case EIO_MKNOD:     req->result = mknodat   (dirfd, req->ptr1, (mode_t)req->int2, (dev_t)req->offs); break;
       case EIO_READLINK:  ALLOC (PATH_MAX);
@@ -2417,7 +2434,7 @@ eio_execute (etp_worker *self, eio_req *req)
       case EIO_MLOCKALL:  req->result = eio__mlockall (req->int1); break;
       case EIO_FALLOCATE: req->result = eio__fallocate (req->int1, req->int2, req->offs, req->size); break;
 
-      case EIO_READDIR:   eio__scandir (req); break;
+      case EIO_READDIR:   eio__scandir (req, self); break;
 
       case EIO_BUSY:
 #ifdef _WIN32
