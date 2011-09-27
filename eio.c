@@ -411,7 +411,7 @@ static etp_worker wrk_first; /* NOT etp */
 
 /* worker threads management */
 
-static void ecb_cold
+static void
 etp_worker_clear (etp_worker *wrk)
 {
 }
