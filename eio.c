@@ -2135,15 +2135,30 @@ eio__statvfsat (int dirfd, const char *path, struct statvfs *buf)
         }					\
     }
 
+static void ecb_noinline ecb_cold
+etp_proc_init (void)
+{
+#if HAVE_PRCTL_SET_NAME
+  /* provide a more sensible "thread name" */
+  char name[16 + 1];
+  const int namelen = sizeof (name) - 1;
+  int len;
+
+  prctl (PR_GET_NAME, (unsigned long)name, 0, 0, 0);
+  name [namelen] = 0;
+  len = strlen (name);
+  strcpy (name + (len < namelen - 4 ? len : namelen - 4), "/eio");
+  prctl (PR_SET_NAME, (unsigned long)name, 0, 0, 0);
+}
+#endif
+
 X_THREAD_PROC (etp_proc)
 {
   ETP_REQ *req;
   struct timespec ts;
   etp_worker *self = (etp_worker *)thr_arg;
 
-#if HAVE_PRCTL_SET_NAME
-  prctl (PR_SET_NAME, (unsigned long)"eio_thread", 0, 0, 0);
-#endif
+  etp_proc_init ();
 
   /* try to distribute timeouts somewhat evenly */
   ts.tv_nsec = ((unsigned long)self & 1023UL) * (1000000000UL / 1024UL);
