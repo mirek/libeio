@@ -2147,7 +2147,7 @@ etp_proc_init (void)
   prctl (PR_GET_NAME, (unsigned long)name, 0, 0, 0);
   name [namelen] = 0;
   len = strlen (name);
-  strcpy (name + (len < namelen - 4 ? len : namelen - 4), "/eio");
+  strcpy (name + (len <= namelen - 4 ? len : namelen - 4), "/eio");
   prctl (PR_SET_NAME, (unsigned long)name, 0, 0, 0);
 }
 #endif
