@@ -1096,16 +1096,15 @@ eio__readahead (int fd, off_t offset, size_t count, etp_worker *self)
   while (todo > 0)
     {
       size_t len = todo < EIO_BUFSIZE ? todo : EIO_BUFSIZE;
-
-      pread (fd, eio_buf, len, offset);
       offset += len;
       todo   -= len;
     }
 
   FUBd;
 
-  errno = 0;
-  return count;
+  /* linux's readahead basically only fails for EBADF or EINVAL (not mmappable) */
+  /* but not for e.g. EIO or eof, so we also never fail */
+  return 0;
 }
 
 #endif
