@@ -210,7 +210,7 @@ static void eio_destroy (eio_req *req);
   #define D_NAME(entp) entp->d_name
 
   /* POSIX_SOURCE is useless on bsd's, and XOPEN_SOURCE is unreliable there, too */
-  #if __FreeBSD__ || defined __NetBSD__ || defined __OpenBSD__
+  #if __FreeBSD__ || __NetBSD__ || __OpenBSD__
     #define _DIRENT_HAVE_D_TYPE /* sigh */
     #define D_INO(de) (de)->d_fileno
     #define D_NAMLEN(de) (de)->d_namlen
@@ -1151,7 +1151,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count)
       if (sbytes)
         res = sbytes;
 
-# elif defined (__APPLE__)
+# elif defined __APPLE__
       off_t sbytes = count;
       res = sendfile (ifd, ofd, offset, &sbytes, 0, 0);
 
