@@ -123,7 +123,7 @@ int main (void)
 ],ac_cv_sync_file_range=yes,ac_cv_sync_file_range=no)])
 test $ac_cv_sync_file_range = yes && AC_DEFINE(HAVE_SYNC_FILE_RANGE, 1, sync_file_range(2) is available)
 
-AC_CACHE_CHECK(for fallocate, ac_cv_flinux_allocate, [AC_LINK_IFELSE([
+AC_CACHE_CHECK(for fallocate, ac_cv_linux_fallocate, [AC_LINK_IFELSE([
 #include <fcntl.h>
 int main (void)
 {
