@@ -68,4 +68,5 @@ TODO: maybe work around 3.996gb barrier in pread/pwrite as well, maybe readahead
           by implementing a working directory abstraction.
         - make readahead emulation behave more like actual readahead by never failing.
         - added EIO_LSEEK (untested).
+        - wtf. etp_proc returned 0, and no compiler ever complained.
 

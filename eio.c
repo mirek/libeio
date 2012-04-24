@@ -2242,8 +2242,6 @@ quit:
   X_LOCK (wrklock);
   etp_worker_free (self);
   X_UNLOCK (wrklock);
-
-  return 0;
 }
 
 /*****************************************************************************/
