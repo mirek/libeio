@@ -381,15 +381,6 @@ static xmutex_t reslock;
 static xmutex_t reqlock;
 static xcond_t  reqwait;
 
-#if !HAVE_PREADWRITE
-/*
- * make our pread/pwrite emulation safe against themselves, but not against
- * normal read/write by using a mutex. slows down execution a lot,
- * but that's your problem, not mine.
- */
-static xmutex_t preadwritelock;
-#endif
-
 typedef struct etp_worker
 {
   struct tmpbuf tmpbuf;
@@ -944,45 +935,6 @@ int eio_poll (void)
 
 /*****************************************************************************/
 /* work around various missing functions */
-
-#if !HAVE_PREADWRITE
-# undef pread
-# undef pwrite
-# define pread  eio__pread
-# define pwrite eio__pwrite
-
-static eio_ssize_t
-eio__pread (int fd, void *buf, size_t count, off_t offset)
-{
-  eio_ssize_t res;
-  off_t ooffset;
-
-  X_LOCK (preadwritelock);
-  ooffset = lseek (fd, 0, SEEK_CUR);
-  lseek (fd, offset, SEEK_SET);
-  res = read (fd, buf, count);
-  lseek (fd, ooffset, SEEK_SET);
-  X_UNLOCK (preadwritelock);
-
-  return res;
-}
-
-static eio_ssize_t
-eio__pwrite (int fd, void *buf, size_t count, off_t offset)
-{
-  eio_ssize_t res;
-  off_t ooffset;
-
-  X_LOCK (preadwritelock);
-  ooffset = lseek (fd, 0, SEEK_CUR);
-  lseek (fd, offset, SEEK_SET);
-  res = write (fd, buf, count);
-  lseek (fd, ooffset, SEEK_SET);
-  X_UNLOCK (preadwritelock);
-
-  return res;
-}
-#endif
 
 #ifndef HAVE_UTIMES
 
@@ -2249,10 +2201,6 @@ quit:
 int ecb_cold
 eio_init (void (*want_poll)(void), void (*done_poll)(void))
 {
-#if !HAVE_PREADWRITE
-  X_MUTEX_CREATE (preadwritelock);
-#endif
-
   return etp_init (want_poll, done_poll);
 }
 
@@ -2262,7 +2210,7 @@ eio_api_destroy (eio_req *req)
   free (req);
 }
 
-#define REQ(rtype)                                            	\
+#define REQ(rtype)						\
   eio_req *req;                                                 \
                                                                 \
   req = (eio_req *)calloc (1, sizeof *req);                     \
