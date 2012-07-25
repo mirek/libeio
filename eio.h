@@ -170,7 +170,9 @@ enum
 /* eio_fallocate flags */
 enum
 {
-  EIO_FALLOC_FL_KEEP_SIZE = 1 /* MUST match the value in linux/falloc.h */
+  /* these MUST match the value in linux/falloc.h */
+  EIO_FALLOC_FL_KEEP_SIZE  = 1,
+  EIO_FALLOC_FL_PUNCH_HOLE = 2
 };
 
 /* timestamps and differences - feel free to use double in your code directly */
